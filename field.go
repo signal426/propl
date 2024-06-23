@@ -7,10 +7,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type ValidationErr struct {
-	Key     string
-	Details string
-}
+type validationErrHandlerFn func(errs map[string]error) error
 
 type validationFn[T proto.Message] func(t T) error
 
