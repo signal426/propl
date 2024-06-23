@@ -13,6 +13,10 @@ func (f fieldStore) empty() bool {
 	return f == nil || len(f) == 0
 }
 
+func (f fieldStore) add(fd *fieldData) {
+	f[fd.p()] = fd
+}
+
 func (f fieldStore) getByPath(p string) *fieldData {
 	fd, ok := f[p]
 	if !ok {
@@ -62,7 +66,8 @@ func traverseMessageForFieldStore(message proto.Message, store fieldStore, init 
 	if message == nil || store.empty() && !init {
 		return nil
 	}
-	if store == nil {
+	fmt.Printf("got here\n")
+	if store.empty() {
 		init = false
 		store = make(fieldStore)
 	}
@@ -73,9 +78,8 @@ func traverseMessageForFieldStore(message proto.Message, store fieldStore, init 
 			// keep ranging
 			return true
 		}
-		if fd.Message() != nil {
-			traverseMessageForFieldStore(fieldValue.Message().Interface(), store, init, fieldData.p(), delimeter)
-		}
+		store.add(fieldData)
+		traverseMessageForFieldStore(fieldValue.Message().Interface(), store, init, fieldData.p(), delimeter)
 		return true
 	})
 	return store
