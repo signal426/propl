@@ -1,7 +1,9 @@
 package protovalidate
 
 import (
-	"reflect"
+	"bytes"
+	"errors"
+	"fmt"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -9,22 +11,35 @@ import (
 
 type validationErrHandlerFn func(errs map[string]error) error
 
-type validationFn[T proto.Message] func(t T) error
+func defaultValidationErrHandlerFn(errs map[string]error) error {
+	var buffer bytes.Buffer
+	buffer.WriteString("field violations: ")
+	for k, v := range errs {
+		buffer.WriteString(fmt.Sprintf("%s: %s\n", k, v.Error()))
+	}
+	return errors.New(buffer.String())
+}
 
-type RequirementCondition uint32
+type policy[T proto.Message] func(t T) error
+
+type PolicyCondition uint32
 
 const (
-	Always RequirementCondition = 1 << iota
+	// NeverZero the field must never be equal to its
+	// zero value in the message body
+	NeverZero PolicyCondition = 1 << iota
+	// SuppliedInMask the field must be supplied in a
+	// field mask
 	InMask
 	NotEqual
 	Custom
 )
 
-func (r RequirementCondition) Add(toAdd RequirementCondition) RequirementCondition {
+func (r PolicyCondition) Add(toAdd PolicyCondition) PolicyCondition {
 	return r | toAdd
 }
 
-func (r RequirementCondition) Has(has RequirementCondition) bool {
+func (r PolicyCondition) Has(has PolicyCondition) bool {
 	return r&has != 0
 }
 
@@ -87,9 +102,10 @@ func newFieldMeta(id string, opts ...fieldMetaOption) *fieldMeta {
 }
 
 type fieldPolicy[T proto.Message] struct {
-	fieldMeta    *fieldMeta
-	conditions   RequirementCondition
-	validationFn validationFn[T]
+	meta       *fieldMeta
+	notEq      any
+	conditions PolicyCondition
+	policy     policy[T]
 }
 
 func parseID(id string) (string, string) {
@@ -104,11 +120,19 @@ func parseID(id string) (string, string) {
 	return parsedID, parentPath
 }
 
-func newFieldPolicy[T proto.Message](id string, cond RequirementCondition, value any, validationFn validationFn[T]) *fieldPolicy[T] {
+func newFieldPolicy[T proto.Message](id string, cond PolicyCondition, value any, notEq any) *fieldPolicy[T] {
 	return &fieldPolicy[T]{
-		conditions:   cond,
-		validationFn: validationFn,
-		fieldMeta:    newFieldMeta(id, fieldMetaWithValue(value)),
+		conditions: cond,
+		meta:       newFieldMeta(id, fieldMetaWithValue(value)),
+		notEq:      notEq,
+	}
+}
+
+func newCustomFieldPolicy[T proto.Message](id string, policy policy[T]) *fieldPolicy[T] {
+	return &fieldPolicy[T]{
+		conditions: Custom,
+		meta:       newFieldMeta(id),
+		policy:     policy,
 	}
 }
 
@@ -118,14 +142,9 @@ func (r *fieldPolicy[T]) inMask(paths PathSet) (bool, bool) {
 	if paths.Empty() {
 		return false, false
 	}
-	return true, paths.Has(r.fieldMeta.GetID())
+	return true, paths.Has(r.meta.GetID())
 }
 
-// todo: maybe remove if get field already does this
-func (r *fieldPolicy[T]) HasValue() bool {
-	return r.fieldMeta.GetValue() != nil && !reflect.ValueOf(r.fieldMeta.GetValue()).IsZero()
-}
-
-func (r *fieldPolicy[T]) validate(rpc string, msg proto.Message, paths PathSet) error {
+func (r *fieldPolicy[T]) check(rpc string, msg proto.Message, paths PathSet) error {
 	return nil
 }

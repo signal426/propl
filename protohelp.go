@@ -9,8 +9,16 @@ import (
 
 type fieldStore map[string]*fieldData
 
-func (f fieldStore) Empty() bool {
+func (f fieldStore) empty() bool {
 	return f == nil || len(f) == 0
+}
+
+func (f fieldStore) getByPath(p string) *fieldData {
+	fd, ok := f[p]
+	if !ok {
+		return nil
+	}
+	return fd
 }
 
 type fieldData struct {
@@ -19,24 +27,39 @@ type fieldData struct {
 	path string
 }
 
-func (f *fieldData) Zero() bool {
+func newFieldData(field protoreflect.FieldDescriptor, value protoreflect.Value, parent, delimeter string) *fieldData {
+	if !field.Name().IsValid() {
+		return nil
+	}
+	path := string(field.Name())
+	if parent != "" {
+		path = fmt.Sprintf("%s%s%s", parent, delimeter, path)
+	}
+	return &fieldData{
+		zero: !value.IsValid(),
+		val:  value,
+		path: path,
+	}
+}
+
+func (f *fieldData) z() bool {
 	return f.zero
 }
 
-func (f *fieldData) Value() any {
+func (f *fieldData) v() any {
 	return f.val
 }
 
-func (f *fieldData) Path() string {
+func (f *fieldData) p() string {
 	return f.path
 }
 
-func MessageToFieldStore(message proto.Message, delimeter string) fieldStore {
-	return messageToFieldStore(message, nil, true, "", delimeter)
+func messageToFieldStore(message proto.Message, delimeter string) fieldStore {
+	return traverseMessageForFieldStore(message, nil, true, "", delimeter)
 }
 
-func messageToFieldStore(message proto.Message, store fieldStore, init bool, parent string, delimeter string) fieldStore {
-	if message == nil || store.Empty() && !init {
+func traverseMessageForFieldStore(message proto.Message, store fieldStore, init bool, parent string, delimeter string) fieldStore {
+	if message == nil || store.empty() && !init {
 		return nil
 	}
 	if store == nil {
@@ -44,21 +67,14 @@ func messageToFieldStore(message proto.Message, store fieldStore, init bool, par
 		store = make(fieldStore)
 	}
 	message.ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-		if fd.Name().IsValid() {
-			value := message.ProtoReflect().Get(fd)
-			path := string(fd.Name())
-			if parent != "" {
-				path = fmt.Sprintf("%s%s%s", parent, delimeter, path)
-			}
-			store[string(fd.Name())] = &fieldData{
-				// implied at this point that
-				zero: !value.IsValid(),
-				val:  value,
-				path: path,
-			}
-			if fd.Message() != nil {
-				fieldDescriptorsToStore(value.Message().Interface(), store, init, path, delimeter)
-			}
+		fieldValue := message.ProtoReflect().Get(fd)
+		fieldData := newFieldData(fd, fieldValue, parent, delimeter)
+		if fieldData == nil {
+			// keep ranging
+			return true
+		}
+		if fd.Message() != nil {
+			traverseMessageForFieldStore(fieldValue.Message().Interface(), store, init, fieldData.p(), delimeter)
 		}
 		return true
 	})

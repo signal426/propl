@@ -5,30 +5,30 @@ import (
 )
 
 type (
-	ErrNoValidationFnProvided error
-	ErrMustNotBeEmpty         error
-	ErrMustNotBeEmptyIfInMask error
-	ErrMustNotEqual           error
-	ErrMustNotEqualIfInMask   error
+	ErrNoValidationFnProvided  error
+	ErrMustNotBeEmpty          error
+	ErrMustNotBeEmptyAndInMask error
+	ErrMustNotBeEmptyIfInMask  error
+	ErrMustNotEqual            error
+	ErrMustNotEqualIfInMask    error
 )
 
-func noValidationFnProvided(property, rpc string) ErrNoValidationFnProvided {
-	return fmt.Errorf("%s is configured for custom validation, but no validation func was provided")
+func (r *RequestValidation[T, U]) noValidationFnProvided(property string) ErrNoValidationFnProvided {
+	return fmt.Errorf("%s is configured for custom validation, but no validation func was provided", property)
 }
 
-// todo: make rpc optional
-func mustNotBeEmpty(property, rpc string) ErrMustNotBeEmpty {
-	return fmt.Errorf("%s must not be empty for %s", property, rpc)
+func mustNotBeEmpty(property string) ErrMustNotBeEmpty {
+	return fmt.Errorf("%s must not be empty", property)
 }
 
-func mustNotBeEmptyIfInMask(property, rpc string) ErrMustNotBeEmptyIfInMask {
-	return fmt.Errorf("%s must not be empty if supplied in field mask for %s", property, rpc)
+func mustNotBeEmptyAndInMask(property string) ErrMustNotBeEmptyAndInMask {
+	return fmt.Errorf("%s must not be empty if supplied in field mask", property)
 }
 
-func mustBeSuppliedInMaskAndNonZero(property, rpc string) ErrMustNotBeEmptyIfInMask {
-	return fmt.Errorf("%s must not be empty and supplied in field mask for %s", property, rpc)
+func mustNotBeZeroIfInMask(property string) ErrMustNotBeEmptyIfInMask {
+	return fmt.Errorf("%s must not be empty and supplied in field mask", property)
 }
 
-func mustNotEqual(property, rpc, expected, actual string) ErrMustNotEqual {
-	return fmt.Errorf("unexpected type for %s, got %s wanted %s for %s", property, actual, expected, rpc)
+func mustNotEqual(property, expected, actual string) ErrMustNotEqual {
+	return fmt.Errorf("unexpected type for %s, got %s wanted %s", property, actual, expected)
 }
