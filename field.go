@@ -9,39 +9,42 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type Trait uint32
+
+const (
+	NotZero Trait = iota << 1
+	NotEq
+	Custom
+)
+
+type Condition uint32
+
+const (
+	InMessage Condition = iota << 1
+	InMask
+)
+
+func And[T uint32](this, and T) T {
+	return this | and
+}
+
+func Has[T uint32](this, has T) bool {
+	return this&has != 0
+}
+
 type validationErrHandlerFn func(errs map[string]error) error
 
 func defaultValidationErrHandlerFn(errs map[string]error) error {
 	var buffer bytes.Buffer
-	buffer.WriteString("field violations: ")
+	buffer.WriteString("field violations: [")
 	for k, v := range errs {
-		buffer.WriteString(fmt.Sprintf("%s: %s\n", k, v.Error()))
+		buffer.WriteString(fmt.Sprintf("%s: %s,\n", k, v.Error()))
 	}
+	buffer.WriteString("]")
 	return errors.New(buffer.String())
 }
 
 type policy[T proto.Message] func(t T) error
-
-type PolicyCondition uint32
-
-const (
-	// NeverZero the field must never be equal to its
-	// zero value in the message body
-	NeverZero PolicyCondition = 1 << iota
-	// SuppliedInMask the field must be supplied in a
-	// field mask
-	InMask
-	NotEqual
-	Custom
-)
-
-func (r PolicyCondition) Add(toAdd PolicyCondition) PolicyCondition {
-	return r | toAdd
-}
-
-func (r PolicyCondition) Has(has PolicyCondition) bool {
-	return r&has != 0
-}
 
 type fieldMeta struct {
 	id         string
@@ -104,7 +107,8 @@ func newFieldMeta(id string, opts ...fieldMetaOption) *fieldMeta {
 type fieldPolicy[T proto.Message] struct {
 	meta       *fieldMeta
 	notEq      any
-	conditions PolicyCondition
+	conditions Condition
+	traits     Trait
 	policy     policy[T]
 }
 
@@ -120,8 +124,8 @@ func parseID(id string) (string, string) {
 	return parsedID, parentPath
 }
 
-func newFieldPolicy[T proto.Message](id string, cond PolicyCondition, value any, notEq any) *fieldPolicy[T] {
-	return &fieldPolicy[T]{
+func NewFieldPolicy(id string, cond PolicyCondition, value any, notEq any) *fieldPolicy[T] {
+	return &fieldPolicy{
 		conditions: cond,
 		meta:       newFieldMeta(id, fieldMetaWithValue(value)),
 		notEq:      notEq,
@@ -145,6 +149,6 @@ func (r *fieldPolicy[T]) inMask(paths PathSet) (bool, bool) {
 	return true, paths.Has(r.meta.GetID())
 }
 
-func (r *fieldPolicy[T]) check(rpc string, msg proto.Message, paths PathSet) error {
+func (r *fieldPolicy[T]) check(rpc string, msg T, paths PathSet) error {
 	return nil
 }

@@ -11,9 +11,9 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 	t.Run("it should create a field store from a proto message", func(t *testing.T) {
 		// arrange
 		expected := fieldStore{
-			"user.first_name": {
+			"user.id": {
 				zero: true,
-				path: "user.first_name",
+				path: "user.id",
 				val:  "",
 			},
 			"user.last_name": {

@@ -46,15 +46,15 @@ func newFieldData(field protoreflect.FieldDescriptor, value protoreflect.Value, 
 	}
 }
 
-func (f *fieldData) z() bool {
+func (f fieldData) z() bool {
 	return f.zero
 }
 
-func (f *fieldData) v() any {
+func (f fieldData) v() any {
 	return f.val
 }
 
-func (f *fieldData) p() string {
+func (f fieldData) p() string {
 	return f.path
 }
 
@@ -66,10 +66,12 @@ func traverseMessageForFieldStore(message proto.Message, store fieldStore, init 
 	if message == nil || store.empty() && !init {
 		return nil
 	}
-	fmt.Printf("got here\n")
-	if store.empty() {
+	if init {
 		init = false
 		store = make(fieldStore)
+	}
+	if message.ProtoReflect().Descriptor().Fields().Len() == 0 {
+		return store
 	}
 	message.ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 		fieldValue := message.ProtoReflect().Get(fd)
@@ -79,6 +81,7 @@ func traverseMessageForFieldStore(message proto.Message, store fieldStore, init 
 			return true
 		}
 		store.add(fieldData)
+		fieldValue.IsValid()
 		traverseMessageForFieldStore(fieldValue.Message().Interface(), store, init, fieldData.p(), delimeter)
 		return true
 	})
