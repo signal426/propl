@@ -124,17 +124,19 @@ func parseID(id string) (string, string) {
 	return parsedID, parentPath
 }
 
-func NewFieldPolicy(id string, cond PolicyCondition, value any, notEq any) *fieldPolicy[T] {
-	return &fieldPolicy{
-		conditions: cond,
+func newFieldPolicy[T proto.Message](id string, traits Trait, conditions Condition, value any, notEq any) *fieldPolicy[T] {
+	return &fieldPolicy[T]{
+		traits:     traits,
+		conditions: conditions,
 		meta:       newFieldMeta(id, fieldMetaWithValue(value)),
 		notEq:      notEq,
 	}
 }
 
-func newCustomFieldPolicy[T proto.Message](id string, policy policy[T]) *fieldPolicy[T] {
+func newCustomFieldPolicy[T proto.Message](id string, traits Trait, conditions Condition, policy policy[T]) *fieldPolicy[T] {
 	return &fieldPolicy[T]{
-		conditions: Custom,
+		traits:     traits,
+		conditions: conditions,
 		meta:       newFieldMeta(id),
 		policy:     policy,
 	}

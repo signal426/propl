@@ -1,5 +1,5 @@
 version: v1
-name: buf.build/signal426/protovalidate
+name: buf.build/signal426/protopolicy
 breaking:
   use:
     - FILE

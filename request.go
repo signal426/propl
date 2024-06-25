@@ -6,8 +6,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type UnAuthedRequestOption[T proto.Message] RequestValidationOption[T, noAuth]
-
 type RequestValidation[T proto.Message, U any] struct {
 	fieldPolicies          []*fieldPolicy[T]
 	authorizationFn        authzFn[T, U]
@@ -53,6 +51,7 @@ func ForRequest[T proto.Message](rpc string, msg T, opts ...UnAuthedRequestOptio
 // 	return r.authorizationFn(r.msg, r.a)
 // }
 
+type UnAuthedRequestOption[T proto.Message] RequestValidationOption[T, noAuth]
 type RequestValidationOption[T proto.Message, U any] func(*RequestValidation[T, U])
 
 func WithValidationHandlerFn[T proto.Message, U any](f validationErrHandlerFn) RequestValidationOption[T, U] {
