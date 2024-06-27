@@ -1,4 +1,4 @@
-package protovalidate
+package protopolicy
 
 import "google.golang.org/protobuf/proto"
 

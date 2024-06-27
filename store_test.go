@@ -1,9 +1,9 @@
-package protovalidate
+package protopolicy
 
 import (
 	"testing"
 
-	protovalidatev1 "buf.build/gen/go/signal426/protovalidate/protocolbuffers/go/protovalidate/v1"
+	protopolicyv1 "buf.build/gen/go/signal426/protopolicy/protocolbuffers/go/protopolicy/v1"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +22,7 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 				val:  "test",
 			},
 		}
-		input := &protovalidatev1.User{
+		input := &protopolicyv1.User{
 			Id:       "test",
 			LastName: "test",
 		}

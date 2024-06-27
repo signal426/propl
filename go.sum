@@ -1,5 +1,5 @@
-buf.build/gen/go/signal426/protovalidate/protocolbuffers/go v1.34.2-20240623064220-5e00985eba92.2 h1:eCjQnJci6StbiW8sq+uh8ApK5sEhQ582M/tKyTeDeEE=
-buf.build/gen/go/signal426/protovalidate/protocolbuffers/go v1.34.2-20240623064220-5e00985eba92.2/go.mod h1:VcYRDVa4DBTS8A3vWgBw2d9ToOkNLe9cEZgU/WwS0Uw=
+buf.build/gen/go/signal426/protopolicy/protocolbuffers/go v1.34.2-20240625164709-c5465f9b308b.2 h1:7WnmTDZRhjKO/KOLW2VuLWKLe81XjxJjt/tnaqzLDN0=
+buf.build/gen/go/signal426/protopolicy/protocolbuffers/go v1.34.2-20240625164709-c5465f9b308b.2/go.mod h1:msLsmfGoG0oMIC6poadg6QubRC9y6nhbOvTYttsdBOE=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/google/go-cmp v0.5.5 h1:Khx7svrCpmxxtHBq5j2mp/xVjsi8hQMfNLvJFAlrGgU=
@@ -12,6 +12,7 @@ golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 h1:E7g+9GITq07hpfrRu66IV
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 google.golang.org/protobuf v1.34.2 h1:6xV6lTsCfpGD21XK49h7MhtcApnLqkfYgPcdHftf6hg=
 google.golang.org/protobuf v1.34.2/go.mod h1:qYOHts0dSfpeUzUFpOMr/WGzszTmLH+DiWniOlNbLDw=
+gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405 h1:yhCVgyC4o1eVCa2tZl7eS0r+SDo693bJlVdllGtEeKM=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

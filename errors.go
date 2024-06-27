@@ -1,4 +1,4 @@
-package protovalidate
+package protopolicy
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ type (
 	ErrMustNotEqualIfInMask    error
 )
 
-func (r *RequestValidation[T, U]) noValidationFnProvided(property string) ErrNoValidationFnProvided {
+func (r *ProtoPolicy[T, U]) noValidationFnProvided(property string) ErrNoValidationFnProvided {
 	return fmt.Errorf("%s is configured for custom validation, but no validation func was provided", property)
 }
 
