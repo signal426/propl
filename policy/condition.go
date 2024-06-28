@@ -1,4 +1,4 @@
-package condition
+package policy
 
 type Condition uint32
 
@@ -9,6 +9,10 @@ const (
 
 func (c Condition) And(and Condition) Condition {
 	return c | and
+}
+
+func (c Condition) Or(or Condition) Condition {
+	return c & or
 }
 
 func (c Condition) Has(has Condition) bool {

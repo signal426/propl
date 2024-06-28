@@ -1,6 +1,7 @@
 package protopolicy
 
 import (
+	"fmt"
 	"testing"
 
 	protopolicyv1 "buf.build/gen/go/signal426/protopolicy/protocolbuffers/go/protopolicy/v1"
@@ -28,6 +29,7 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 		}
 		// act
 		store := messageToFieldStore(input, ".")
+		fmt.Printf("%+v\n", store)
 		// assert
 		assert.Equal(t, 2, len(store))
 		for _, e := range expected {

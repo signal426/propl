@@ -3,58 +3,52 @@ package protopolicy
 import (
 	"context"
 
+	"github.com/signal426/protopolicy/policy"
 	"google.golang.org/protobuf/proto"
 )
-
-type Policy interface {
-	GetBreaches(ctx context.Context) error
-}
 
 type RequestPolicy[T proto.Message] struct {
 	rpc                    string
 	requestMessage         T
-	fieldPolicies          []*fieldPolicy[T]
-	paths                  PathSet
+	fieldPolicies          []*fieldPolicy
 	fieldStore             fieldStore
 	validationErrHandlerFn validationErrHandlerFn
 	authorizer             authorizer[T]
 }
 
-func ForRequest[T proto.Message](rpc string, msg T, opts ...RequestPolicyOption[T]) *RequestPolicy[T] {
+func ForRequest[T proto.Message](rpc string, msg T, paths ...string) *RequestPolicy[T] {
 	r := &RequestPolicy[T]{
-		rpc:           rpc,
-		fieldPolicies: []*fieldPolicy[T]{},
-		fieldStore:    messageToFieldStore(msg, "."),
-	}
-	if len(opts) > 0 {
-		for _, o := range opts {
-			o(r)
-		}
+		rpc:            rpc,
+		requestMessage: msg,
+		fieldPolicies:  []*fieldPolicy{},
+		fieldStore:     messageToFieldStore(msg, ".", paths...),
 	}
 	return r
 }
 
-type RequestPolicyOption[T proto.Message] func(*RequestPolicy[T])
-
-func WithValidationHandlerFn[T proto.Message, U any](f validationErrHandlerFn) RequestPolicyOption[T] {
-	return func(r *RequestPolicy[T]) {
-		r.validationErrHandlerFn = f
-	}
+func (r *RequestPolicy[T]) WithValidationHandlerFn(f validationErrHandlerFn) *RequestPolicy[T] {
+	r.validationErrHandlerFn = f
+	return r
 }
 
-func (r *RequestPolicy[T]) WithAuthorizer(a authorizer[T]) RequestPolicyOption[T] {
-	return func(r *RequestPolicy[T]) {
-		r.authorizer = a
-	}
+func (r *RequestPolicy[T]) WithAuthorizer(a authorizer[T]) *RequestPolicy[T] {
+	r.authorizer = a
+	return r
 }
 
-func (r *RequestPolicy[T]) WithFieldPolicy(fp *fieldPolicy[T]) RequestPolicyOption[T] {
-	return func(r *RequestPolicy[T]) {
-		r.fieldPolicies = append(r.fieldPolicies, fp)
-	}
+func (r *RequestPolicy[T]) WithFieldPolicy(path string, policy *policy.Policy) *RequestPolicy[T] {
+	r.fieldPolicies = append(r.fieldPolicies, &fieldPolicy{
+		policy: policy,
+		field:  r.fieldStore.getByPath(path),
+		id:     path,
+	})
+	return r
 }
 
-func (r *RequestPolicy[T]) GetBreaches(ctx context.Context) error {
+func (r *RequestPolicy[T]) GetViolations(ctx context.Context) error {
+	if r.validationErrHandlerFn == nil {
+		r.validationErrHandlerFn = defaultValidationErrHandlerFn
+	}
 	violations := make(map[string]error)
 	if r.authorizer != nil {
 		if err := r.authorizer(r.requestMessage); err != nil {
@@ -62,7 +56,8 @@ func (r *RequestPolicy[T]) GetBreaches(ctx context.Context) error {
 		}
 	}
 	for _, fp := range r.fieldPolicies {
-		if err := fp.check(r.rpc, r.requestMessage, r.paths); err != nil {
+		if err := fp.check(); err != nil {
+			violations[fp.id] = err
 		}
 	}
 	if len(violations) > 0 {

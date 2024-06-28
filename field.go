@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/signal426/protopolicy/condition"
-	"github.com/signal426/protopolicy/trait"
-	"google.golang.org/protobuf/proto"
+	"github.com/signal426/protopolicy/policy"
 )
 
 type validationErrHandlerFn func(errs map[string]error) error
@@ -23,72 +21,10 @@ func defaultValidationErrHandlerFn(errs map[string]error) error {
 	return errors.New(buffer.String())
 }
 
-type policy[T proto.Message] func(t T) error
-
-type fieldMeta struct {
-	id         string
-	value      any
-	parentPath string
-	fullPath   string
-}
-
-func (f *fieldMeta) GetID() string {
-	if f == nil {
-		return ""
-	}
-	return f.id
-}
-
-func (f *fieldMeta) GetValue() any {
-	if f == nil {
-		return nil
-	}
-	return f.value
-}
-
-func (f *fieldMeta) GetParentPath() string {
-	if f == nil {
-		return ""
-	}
-	return f.parentPath
-}
-
-func (f *fieldMeta) GetFullPath() string {
-	if f == nil {
-		return ""
-	}
-	return f.fullPath
-}
-
-type fieldMetaOption func(*fieldMeta)
-
-func fieldMetaWithValue(v any) fieldMetaOption {
-	return func(fm *fieldMeta) {
-		fm.value = v
-	}
-}
-
-func newFieldMeta(id string, opts ...fieldMetaOption) *fieldMeta {
-	parsedID, parentPath := parseID(id)
-	fm := &fieldMeta{
-		id:         parsedID,
-		parentPath: parentPath,
-		fullPath:   id,
-	}
-	if len(opts) > 0 {
-		for _, o := range opts {
-			o(fm)
-		}
-	}
-	return fm
-}
-
-type fieldPolicy[T proto.Message] struct {
-	meta       *fieldMeta
-	notEq      any
-	conditions condition.Condition
-	traits     trait.Trait
-	policy     policy[T]
+type fieldPolicy struct {
+	id     string
+	field  *fieldData
+	policy *policy.Policy
 }
 
 func parseID(id string) (string, string) {
@@ -103,33 +39,6 @@ func parseID(id string) (string, string) {
 	return parsedID, parentPath
 }
 
-func newFieldPolicy[T proto.Message](id string, traits trait.Trait, conditions condition.Condition, notEq any) *fieldPolicy[T] {
-	return &fieldPolicy[T]{
-		traits:     traits,
-		conditions: conditions,
-		meta:       newFieldMeta(id, fieldMetaWithValue(value)),
-		notEq:      notEq,
-	}
-}
-
-func newCustomFieldPolicy[T proto.Message](id string, traits Trait, conditions Condition, policy policy[T]) *fieldPolicy[T] {
-	return &fieldPolicy[T]{
-		traits:     traits,
-		conditions: conditions,
-		meta:       newFieldMeta(id),
-		policy:     policy,
-	}
-}
-
-// inMask returns two booleans -- first to indicate if the paths were
-// queryable and second to indicate if the field is in the collection of paths.
-func (r *fieldPolicy[T]) inMask(paths PathSet) (bool, bool) {
-	if paths.Empty() {
-		return false, false
-	}
-	return true, paths.Has(r.meta.GetID())
-}
-
-func (r *fieldPolicy[T]) check(rpc string, msg T, paths PathSet) error {
-	return nil
+func (r *fieldPolicy) check() error {
+	return r.policy.Execute(r.field)
 }
