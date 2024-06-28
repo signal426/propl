@@ -13,7 +13,7 @@ type (
 	ErrMustNotEqualIfInMask    error
 )
 
-func (r *ProtoPolicy[T, U]) noValidationFnProvided(property string) ErrNoValidationFnProvided {
+func noValidationFnProvided(property string) ErrNoValidationFnProvided {
 	return fmt.Errorf("%s is configured for custom validation, but no validation func was provided", property)
 }
 

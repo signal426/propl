@@ -6,35 +6,22 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type RequestValidation[T proto.Message, U any] struct {
-	fieldPolicies          []*fieldPolicy[T]
-	authorizationFn        authzFn[T, U]
+type Policy interface {
+	GetBreaches(ctx context.Context) error
+}
+
+type RequestPolicy[T proto.Message] struct {
 	rpc                    string
+	requestMessage         T
+	fieldPolicies          []*fieldPolicy[T]
 	paths                  PathSet
 	fieldStore             fieldStore
-	authz                  bool
 	validationErrHandlerFn validationErrHandlerFn
-	msg                    T
+	authorizer             authorizer[T]
 }
 
-func ForAuthorizedRequest[T proto.Message, U any](rpc string, msg T, authzCheck authzFn[T, U], opts ...RequestValidationOption[T, U]) *RequestValidation[T, U] {
-	r := &RequestValidation[T, U]{
-		rpc:             rpc,
-		fieldPolicies:   []*fieldPolicy[T]{},
-		fieldStore:      messageToFieldStore(msg, "."),
-		authz:           true,
-		authorizationFn: authzCheck,
-	}
-	if len(opts) > 0 {
-		for _, o := range opts {
-			o(r)
-		}
-	}
-	return r
-}
-
-func ForRequest[T proto.Message](rpc string, msg T, opts ...UnAuthedRequestOption[T]) *RequestValidation[T, noAuth] {
-	r := &RequestValidation[T, noAuth]{
+func ForRequest[T proto.Message](rpc string, msg T, opts ...RequestPolicyOption[T]) *RequestPolicy[T] {
+	r := &RequestPolicy[T]{
 		rpc:           rpc,
 		fieldPolicies: []*fieldPolicy[T]{},
 		fieldStore:    messageToFieldStore(msg, "."),
@@ -47,42 +34,39 @@ func ForRequest[T proto.Message](rpc string, msg T, opts ...UnAuthedRequestOptio
 	return r
 }
 
-// func (r *RequestValidation[T, U]) Authorize(ctx context.Context) error {
-// 	return r.authorizationFn(r.msg, r.a)
-// }
+type RequestPolicyOption[T proto.Message] func(*RequestPolicy[T])
 
-type UnAuthedRequestOption[T proto.Message] RequestValidationOption[T, noAuth]
-type RequestValidationOption[T proto.Message, U any] func(*RequestValidation[T, U])
-
-func WithValidationHandlerFn[T proto.Message, U any](f validationErrHandlerFn) RequestValidationOption[T, U] {
-	return func(r *RequestValidation[T, U]) {
+func WithValidationHandlerFn[T proto.Message, U any](f validationErrHandlerFn) RequestPolicyOption[T] {
+	return func(r *RequestPolicy[T]) {
 		r.validationErrHandlerFn = f
 	}
 }
 
-func (r *RequestValidation[T, U]) WithFieldPolicies(fp ...*fieldPolicy[T]) RequestValidationOption[T, U] {
-	return func(r *RequestValidation[T, U]) {
-		if len(fp) > 0 {
-			for _, f := range fp {
-				r.fieldPolicies = append(r.fieldPolicies, f)
-			}
-		}
+func (r *RequestPolicy[T]) WithAuthorizer(a authorizer[T]) RequestPolicyOption[T] {
+	return func(r *RequestPolicy[T]) {
+		r.authorizer = a
 	}
 }
 
-// Do first checks the permissions of the requester (if authz requested)
-// and then validates the properties of the request as directed by the caller.
-// Returns a connect err.
-func (r *RequestValidation[T, U]) Do(ctx context.Context) error {
-	// if err := r.Authorize(ctx); err != nil {
-	// 	return err
-	// }
+func (r *RequestPolicy[T]) WithFieldPolicy(fp *fieldPolicy[T]) RequestPolicyOption[T] {
+	return func(r *RequestPolicy[T]) {
+		r.fieldPolicies = append(r.fieldPolicies, fp)
+	}
+}
+
+func (r *RequestPolicy[T]) GetBreaches(ctx context.Context) error {
 	violations := make(map[string]error)
+	if r.authorizer != nil {
+		if err := r.authorizer(r.requestMessage); err != nil {
+			return err
+		}
+	}
 	for _, fp := range r.fieldPolicies {
-		if err := fp.check(r.rpc, r.msg, r.paths); err != nil {
+		if err := fp.check(r.rpc, r.requestMessage, r.paths); err != nil {
 		}
 	}
 	if len(violations) > 0 {
+		return r.validationErrHandlerFn(violations)
 	}
 	return nil
 }

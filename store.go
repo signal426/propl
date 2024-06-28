@@ -81,7 +81,6 @@ func traverseMessageForFieldStore(message proto.Message, store fieldStore, init 
 			return true
 		}
 		store.add(fieldData)
-		fieldValue.IsValid()
 		traverseMessageForFieldStore(fieldValue.Message().Interface(), store, init, fieldData.p(), delimeter)
 		return true
 	})

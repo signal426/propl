@@ -6,31 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/signal426/protopolicy/condition"
+	"github.com/signal426/protopolicy/trait"
 	"google.golang.org/protobuf/proto"
 )
-
-type Trait uint32
-
-const (
-	NotZero Trait = iota << 1
-	NotEq
-	Custom
-)
-
-type Condition uint32
-
-const (
-	InMessage Condition = iota << 1
-	InMask
-)
-
-func And[T uint32](this, and T) T {
-	return this | and
-}
-
-func Has[T uint32](this, has T) bool {
-	return this&has != 0
-}
 
 type validationErrHandlerFn func(errs map[string]error) error
 
@@ -107,8 +86,8 @@ func newFieldMeta(id string, opts ...fieldMetaOption) *fieldMeta {
 type fieldPolicy[T proto.Message] struct {
 	meta       *fieldMeta
 	notEq      any
-	conditions Condition
-	traits     Trait
+	conditions condition.Condition
+	traits     trait.Trait
 	policy     policy[T]
 }
 
@@ -124,7 +103,7 @@ func parseID(id string) (string, string) {
 	return parsedID, parentPath
 }
 
-func newFieldPolicy[T proto.Message](id string, traits Trait, conditions Condition, value any, notEq any) *fieldPolicy[T] {
+func newFieldPolicy[T proto.Message](id string, traits trait.Trait, conditions condition.Condition, notEq any) *fieldPolicy[T] {
 	return &fieldPolicy[T]{
 		traits:     traits,
 		conditions: conditions,
