@@ -131,24 +131,19 @@ func fillStore(message proto.Message, paths pathSet, store fieldStore, init bool
 	}
 	message.ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 		fieldValue := message.ProtoReflect().Get(fd)
-		var (
-			inMask bool
-			match  string
-		)
+		var match string
 		if !paths.empty() {
 			if paths.has(string(fd.Name())) {
-				inMask = true
 				match = string(fd.Name())
 			} else if fd.HasJSONName() && paths.has(fd.JSONName()) {
-				inMask = true
 				match = fd.JSONName()
 			}
 			// if it's in the mask, claim it
-			if inMask {
+			if match != "" {
 				paths.claim(match)
 			}
 		}
-		fieldData := newFieldData(fieldValue.Interface(), fieldValue.IsValid(), inMask, string(fd.Name()), parent)
+		fieldData := newFieldData(fieldValue.Interface(), fieldValue.IsValid(), match != "", string(fd.Name()), parent)
 		store.add(fieldData)
 		if fd.Message() == nil {
 			return true
