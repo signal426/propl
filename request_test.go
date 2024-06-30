@@ -61,6 +61,7 @@ func TestFieldPolicies(t *testing.T) {
 		}
 		p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
 			WithFieldPolicy("user.id", NeverZero()).
+			WithFieldPolicy("some.fake", NeverZero()).
 			WithFieldPolicy("user.first_name", NeverZeroWhen(InMask).
 				And(Calculated("it should not be equal to bob", firstNameNotBob))).
 			WithFieldPolicy("user.last_name", NeverZeroWhen(InMask)).

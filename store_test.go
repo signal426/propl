@@ -16,11 +16,13 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 				zero: false,
 				path: "user.id",
 				val:  "abc123",
+				set:  true,
 			},
 			"user.first_name": {
-				zero: true,
-				path: "first_name",
-				val:  nil,
+				zero:   true,
+				path:   "first_name",
+				val:    nil,
+				inMask: true,
 			},
 			"update_mask": {
 				zero: false,
@@ -28,11 +30,13 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 				val: &fieldmaskpb.FieldMask{
 					Paths: []string{"first_name"},
 				},
+				set: true,
 			},
 			"update_mask.paths": {
 				zero: false,
 				path: "update_mask.paths",
 				val:  []string{"first_name"},
+				set:  true,
 			},
 		}
 		input := &proplv1.UpdateUserRequest{
@@ -52,6 +56,8 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 			a := store.getByPath(e.p())
 			assert.Equal(t, e.p(), a.p())
 			assert.Equal(t, e.z(), a.z())
+			assert.Equal(t, e.s(), a.s())
+			assert.Equal(t, e.m(), a.m())
 		}
 	})
 }
