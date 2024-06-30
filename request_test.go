@@ -2,14 +2,17 @@ package propl
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	proplv1 "buf.build/gen/go/signal426/propl/protocolbuffers/go/propl/v1"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func firstNameNotBob(v any) bool {
-	return v == "bob"
+	return strings.ToLower(v.(string)) != "bob"
 }
 
 func TestFieldPolicies(t *testing.T) {
@@ -21,15 +24,14 @@ func TestFieldPolicies(t *testing.T) {
 			},
 		}
 		p := ForRequest("createUser", req).
-			WithFieldPolicy("user.id", NeverZero()).
-			WithFieldPolicy("user.first_name", Calculated(firstNameNotBob))
+			WithFieldPolicy("user.id", NeverZero())
 		// act
 		err := p.GetViolations(context.Background())
 		// assert
 		assert.Error(t, err)
 	})
 
-	t.Run("it should validate complex", func(t *testing.T) {
+	t.Run("it should validate custom", func(t *testing.T) {
 		// arrange
 		req := &proplv1.CreateUserRequest{
 			User: &proplv1.User{
@@ -37,13 +39,38 @@ func TestFieldPolicies(t *testing.T) {
 			},
 		}
 		p := ForRequest("createUser", req).
-			WithFieldPolicy("user.id", NeverZero()).
-			WithFieldPolicy("user.address.line1", NeverZeroWhen(InMask)).
-			WithFieldPolicy("user.address", NeverZero()).
-			WithFieldPolicy("user.first_name", Calculated(firstNameNotBob))
+			WithFieldPolicy("user.first_name", Calculated(TraitCalculation{ItShouldNot: "be equal to bob", Calculation: firstNameNotBob}))
 		// act
 		err := p.GetViolations(context.Background())
 		// assert
 		assert.Error(t, err)
+	})
+
+	t.Run("it should validate nested", func(t *testing.T) {
+		// arrange
+		req := &proplv1.UpdateUserRequest{
+			User: &proplv1.User{
+				FirstName: "bob",
+				PrimaryAddress: &proplv1.Address{
+					Line1: "a",
+					Line2: "b",
+				},
+			},
+			UpdateMask: &fieldmaskpb.FieldMask{
+				Paths: []string{"first_name"},
+			},
+		}
+		p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
+			WithFieldPolicy("user.id", NeverZero()).
+			WithFieldPolicy("user.first_name", NeverZeroWhen(InMask).
+				And(Calculated(TraitCalculation{ItShouldNot: "be equal to bob", Calculation: firstNameNotBob}))).
+			WithFieldPolicy("user.last_name", NeverZeroWhen(InMask)).
+			WithFieldPolicy("user.primary_address", NeverZeroWhen(InMask)).
+			WithFieldPolicy("user.primary_address.line1", NeverZeroWhen(InMask))
+		// act
+		err := p.GetViolations(context.Background())
+		// assert
+		assert.Error(t, err)
+		fmt.Printf(err.Error())
 	})
 }
