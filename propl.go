@@ -27,7 +27,7 @@ type Propl[T proto.Message] struct {
 	precheck                Precheck[T]
 }
 
-// ForMessage creates a new policy aggregate that can be built upon using the
+// For creates a new policy aggregate for the specified message that can be built upon using the
 // builder methods.
 func For[T proto.Message](msg T, paths ...string) *Propl[T] {
 	fieldStore := newFieldStore()
