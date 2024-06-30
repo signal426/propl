@@ -6,7 +6,7 @@ import (
 
 type Subject interface {
 	HasTrait(t Trait) bool
-	MeetsConditions(condition Condition) bool
+	ActionFromConditions(condition Condition) Action
 }
 
 type Policy struct {
@@ -14,17 +14,17 @@ type Policy struct {
 	traits     *Trait
 }
 
-func NeverZeroWhen(c Condition) *Policy {
-	return &Policy{
-		traits:     notZeroTrait(),
-		conditions: c,
-	}
-}
-
 func NeverZero() *Policy {
 	return &Policy{
 		traits:     notZeroTrait(),
 		conditions: InMessage.And(InMask),
+	}
+}
+
+func NeverZeroWhen(c Condition) *Policy {
+	return &Policy{
+		traits:     notZeroTrait(),
+		conditions: c,
 	}
 }
 
@@ -43,24 +43,32 @@ func CalculatedWhen(tc TraitCalculation, c Condition) *Policy {
 }
 
 func (p *Policy) Execute(s Subject) error {
-	if s.MeetsConditions(p.conditions) && p.traits != nil {
-		return p.checkTraits(s, p.traits, nil)
+	switch s.ActionFromConditions(p.conditions) {
+	case Skip:
+		return nil
+	case Fail:
+		return fmt.Errorf("did not meet conditions %s", p.conditions.FlagsString())
+	default:
+		return p.checkTraits(s, p.traits)
 	}
-	return fmt.Errorf("does not meet conditions")
 }
 
-func (p *Policy) checkTraits(s Subject, trait *Trait, prev *Trait) error {
+func (p *Policy) checkTraits(s Subject, trait *Trait) error {
 	if trait == nil {
 		return nil
 	}
 	if !s.HasTrait(*trait) {
+		// if we have an or, keep going
 		if trait.or != nil {
-			return p.checkTraits(s, trait.or, trait)
+			return p.checkTraits(s, trait.or)
 		}
-		return fmt.Errorf("does not meet policy")
+		// else, we're done checking
+		return fmt.Errorf("does not have trait %s", trait.Trait().String())
 	}
+	// if there's an and condition, keep going
+	// else, we're done
 	if trait.and != nil {
-		return p.checkTraits(s, trait.and, trait)
+		return p.checkTraits(s, trait.and)
 	}
 	return nil
 }

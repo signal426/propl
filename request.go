@@ -7,12 +7,11 @@ import (
 )
 
 type RequestPolicy[T proto.Message] struct {
-	rpc                    string
-	requestMessage         T
-	fieldPolicies          []*fieldPolicy
-	fieldStore             fieldStore
-	validationErrHandlerFn validationErrHandlerFn
-	authorizer             authorizer[T]
+	rpc               string
+	requestMessage    T
+	fieldPolicies     []*fieldPolicy
+	fieldStore        fieldStore
+	violationsHandler ViolationsHandler
 }
 
 func ForRequest[T proto.Message](rpc string, msg T, paths ...string) *RequestPolicy[T] {
@@ -27,13 +26,8 @@ func ForRequest[T proto.Message](rpc string, msg T, paths ...string) *RequestPol
 	return r
 }
 
-func (r *RequestPolicy[T]) WithValidationHandlerFn(f validationErrHandlerFn) *RequestPolicy[T] {
-	r.validationErrHandlerFn = f
-	return r
-}
-
-func (r *RequestPolicy[T]) WithAuthorizer(a authorizer[T]) *RequestPolicy[T] {
-	r.authorizer = a
+func (r *RequestPolicy[T]) WithViolationsHandler(f ViolationsHandler) *RequestPolicy[T] {
+	r.violationsHandler = f
 	return r
 }
 
@@ -52,22 +46,17 @@ func (r *RequestPolicy[T]) WithFieldPolicy(path string, policy *Policy) *Request
 }
 
 func (r *RequestPolicy[T]) GetViolations(ctx context.Context) error {
-	if r.validationErrHandlerFn == nil {
-		r.validationErrHandlerFn = defaultValidationErrHandlerFn
+	if r.violationsHandler == nil {
+		r.violationsHandler = defaultValidationErrHandlerFn
 	}
 	violations := make(map[string]error)
-	if r.authorizer != nil {
-		if err := r.authorizer(r.requestMessage); err != nil {
-			return err
-		}
-	}
 	for _, fp := range r.fieldPolicies {
 		if err := fp.check(); err != nil {
 			violations[fp.id] = err
 		}
 	}
 	if len(violations) > 0 {
-		return r.validationErrHandlerFn(violations)
+		return r.violationsHandler(violations)
 	}
 	return nil
 }

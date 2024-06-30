@@ -3,6 +3,7 @@ package propl
 import (
 	"testing"
 
+	proplv1 "buf.build/gen/go/signal426/propl/protocolbuffers/go/propl/v1"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
@@ -34,8 +35,8 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 				val:  []string{"first_name"},
 			},
 		}
-		input := &protopolicyv1.UpdateUserRequest{
-			User: &protopolicyv1.User{
+		input := &proplv1.UpdateUserRequest{
+			User: &proplv1.User{
 				Id: "abc123",
 			},
 			UpdateMask: &fieldmaskpb.FieldMask{
