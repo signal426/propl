@@ -3,7 +3,11 @@ package propl
 import (
 	"errors"
 	"fmt"
+
+	"google.golang.org/protobuf/proto"
 )
+
+type Precheck[T proto.Message] func(msg T) error
 
 type Subject interface {
 	HasTrait(t trait) bool
@@ -76,7 +80,7 @@ func (p *Policy) Execute(s Subject) error {
 	case Skip:
 		return nil
 	case Fail:
-		return fmt.Errorf("did not meet conditions %s", p.conditions.FlagsString())
+		return fmt.Errorf("subject did not meet conditions %s", p.conditions.FlagsString())
 	default:
 		return p.checkTraits(s, p.traits)
 	}

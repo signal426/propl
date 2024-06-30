@@ -24,7 +24,7 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := ForRequest("createUser", req).
+		p := ForMessage(req).
 			WithFieldPolicy("user.id", NeverZero())
 		// act
 		err := p.E(context.Background())
@@ -39,7 +39,7 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := ForRequest("createUser", req).
+		p := ForMessage(req).
 			WithFieldPolicy("user.first_name", Calculated("be equal to bob", firstNameNotBob))
 		// act
 		err := p.E(context.Background())
@@ -61,7 +61,7 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name"},
 			},
 		}
-		p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
+		p := ForMessage(req, req.GetUpdateMask().GetPaths()...).
 			WithFieldPolicy("user.id", NeverZero()).
 			WithFieldPolicy("some.fake", NeverZero()).
 			WithFieldPolicy("user.first_name", NeverZeroWhen(InMask).
@@ -96,7 +96,7 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name"},
 			},
 		}
-		p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
+		p := ForMessage(req, req.GetUpdateMask().GetPaths()...).
 			WithFieldInfractionsHandler(finfractionsHandler).
 			WithFieldPolicy("user.id", NeverZero()).
 			WithFieldPolicy("some.fake", NeverZero()).
@@ -131,7 +131,7 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name"},
 			},
 		}
-		p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
+		p := ForMessage(req, req.GetUpdateMask().GetPaths()...).
 			WithPrecheckPolicy(authorizeUpdate).
 			WithFieldPolicy("user.id", NeverZero()).
 			WithFieldPolicy("some.fake", NeverZero()).
