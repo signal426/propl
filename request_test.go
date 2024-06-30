@@ -2,6 +2,7 @@ package propl
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -56,7 +57,7 @@ func TestFieldPolicies(t *testing.T) {
 				},
 			},
 			UpdateMask: &fieldmaskpb.FieldMask{
-				Paths: []string{"first_name"},
+				Paths: []string{"first_name", "last_name"},
 			},
 		}
 		p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
@@ -71,5 +72,6 @@ func TestFieldPolicies(t *testing.T) {
 		err := p.GetViolations(context.Background())
 		// assert
 		assert.Error(t, err)
+		fmt.Printf("%v", err)
 	})
 }

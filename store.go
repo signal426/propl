@@ -56,8 +56,8 @@ func (f *fieldData) HasTrait(t trait) bool {
 	return true
 }
 
-// ActionsFromConditions implements policy.Subject.
-func (f *fieldData) ActionFromConditions(conditions Condition) Action {
+// ConditionalAction implements policy.Subject.
+func (f *fieldData) ConditionalAction(conditions Condition) Action {
 	if !f.s() && conditions.Has(InMessage) {
 		return Fail
 	}
@@ -116,20 +116,16 @@ func (f fieldData) s() bool {
 // of the mask paths requested (if present), and creates unset fields for anything
 // specified in the mask but not set on the message.
 func (store fieldStore) fill(message proto.Message, paths ...string) {
-	var pathSet PathSet
-	if len(paths) > 0 {
-		pathSet = NewPathSet(paths...)
-	}
+	pathSet := newPathSet(paths...)
 	fillStore(message, pathSet, store, true, "")
-	if len(pathSet) > 0 {
-		for p := range pathSet {
-			store.add(newUnsetFieldData(p, true))
-		}
+	// we have unclaimed paths, create unset fields from them
+	for _, uc := range pathSet.unclaimed() {
+		store.add(newUnsetFieldData(uc, true))
 	}
 }
 
-// fillSstore recursively ranges over the fields in the message.
-func fillStore(message proto.Message, paths PathSet, store fieldStore, init bool, parent string) {
+// fillStore recursively ranges over the fields in the message.
+func fillStore(message proto.Message, paths pathSet, store fieldStore, init bool, parent string) {
 	if message == nil || store.empty() && !init {
 		return
 	}
@@ -139,16 +135,17 @@ func fillStore(message proto.Message, paths PathSet, store fieldStore, init bool
 			inMask bool
 			match  string
 		)
-		if paths != nil {
-			if paths.Has(string(fd.Name())) {
+		if !paths.empty() {
+			if paths.has(string(fd.Name())) {
 				inMask = true
 				match = string(fd.Name())
-			} else if fd.HasJSONName() && paths.Has(fd.JSONName()) {
+			} else if fd.HasJSONName() && paths.has(fd.JSONName()) {
 				inMask = true
 				match = fd.JSONName()
 			}
+			// if it's in the mask, claim it
 			if inMask {
-				paths.Remove(match)
+				paths.claim(match)
 			}
 		}
 		fieldData := newFieldData(fieldValue.Interface(), fieldValue.IsValid(), inMask, string(fd.Name()), parent)

@@ -7,7 +7,7 @@ import (
 
 type Subject interface {
 	HasTrait(t trait) bool
-	ActionFromConditions(condition Condition) Action
+	ConditionalAction(condition Condition) Action
 }
 
 type Policy struct {
@@ -41,6 +41,12 @@ func (p *Policy) And(and *Policy) *Policy {
 	return p
 }
 
+func (p *Policy) Or(or *Policy) *Policy {
+	p.traits.or(or.traits)
+	p.conditions.Or(or.conditions)
+	return p
+}
+
 // Calculated runs the specified function if field is set.
 func Calculated(assertion string, calc func(any) bool) *Policy {
 	return &Policy{
@@ -63,10 +69,10 @@ func CalculatedWhen(assertion string, calc func(any) bool, c Condition) *Policy 
 	}
 }
 
-// Execute checks traits on the field based on the action signal
-// specified from the subject.
+// Execute checks traits on the field based on the conditional action signal
+// returned from the subject.
 func (p *Policy) Execute(s Subject) error {
-	switch s.ActionFromConditions(p.conditions) {
+	switch s.ConditionalAction(p.conditions) {
 	case Skip:
 		return nil
 	case Fail:

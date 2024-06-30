@@ -1,26 +1,40 @@
 package propl
 
-type PathSet map[string]struct{}
+type pathSet map[string]bool
 
-// NewPathSet creates a string set.
+// NewpathSet creates a string set.
 // Duplicate keys are de-duped.
-func NewPathSet(paths ...string) PathSet {
-	ps := make(PathSet)
+func newPathSet(paths ...string) pathSet {
+	ps := make(pathSet)
 	for _, p := range paths {
-		ps[p] = struct{}{}
+		ps[p] = false
 	}
 	return ps
 }
 
-func (ps PathSet) Empty() bool {
+func (ps pathSet) empty() bool {
 	return ps == nil || len(ps) == 0
 }
 
-func (ps PathSet) Has(e string) bool {
+func (ps pathSet) has(e string) bool {
 	_, ok := ps[e]
 	return ok
 }
 
-func (ps PathSet) Remove(e string) {
-	delete(ps, e)
+func (ps pathSet) claim(e string) {
+	ps[e] = true
+}
+
+func (ps pathSet) unclaimed() []string {
+	unclaimed := []string{}
+	for k, v := range ps {
+		if !v {
+			unclaimed = append(unclaimed, k)
+		}
+	}
+	return unclaimed
+}
+
+func (ps pathSet) claimed(e string) bool {
+	return ps[e]
 }
