@@ -1,4 +1,4 @@
-package policy
+package protopolicy
 
 import (
 	"fmt"
@@ -10,54 +10,40 @@ type Subject interface {
 }
 
 type Policy struct {
-	condition Condition
-	traits    *Trait
+	conditions Condition
+	traits     *Trait
 }
 
 func NeverZeroWhen(c Condition) *Policy {
 	return &Policy{
-		traits:    notZeroTrait(),
-		condition: c,
+		traits:     notZeroTrait(),
+		conditions: c,
 	}
 }
 
 func NeverZero() *Policy {
 	return &Policy{
-		traits:    notZeroTrait(),
-		condition: InMessage.And(InMask),
+		traits:     notZeroTrait(),
+		conditions: InMessage.And(InMask),
 	}
 }
 
-func NeverEqual(v any) *Policy {
+func Calculated(tc TraitCalculation) *Policy {
 	return &Policy{
-		traits:    notEqualToTrait(v),
-		condition: InMessage.And(InMask),
+		traits:     calculatedTrait(tc),
+		conditions: InMessage.And(InMask),
 	}
 }
 
-func NeverEqualWhen(v any, c Condition) *Policy {
+func CalculatedWhen(tc TraitCalculation, c Condition) *Policy {
 	return &Policy{
-		traits:    notEqualToTrait(v),
-		condition: c,
-	}
-}
-
-func CalculatedTrait(tc TraitCalculation) *Policy {
-	return &Policy{
-		traits:    calculatedTrait(tc),
-		condition: InMessage.And(InMask),
-	}
-}
-
-func CalculatedTraitWhen(tc TraitCalculation, c Condition) *Policy {
-	return &Policy{
-		traits:    calculatedTrait(tc),
-		condition: c,
+		traits:     calculatedTrait(tc),
+		conditions: c,
 	}
 }
 
 func (p *Policy) Execute(s Subject) error {
-	if s.MeetsConditions(p.condition) && p.traits != nil {
+	if s.MeetsConditions(p.conditions) && p.traits != nil {
 		return p.checkTraits(s, p.traits, nil)
 	}
 	return fmt.Errorf("does not meet conditions")

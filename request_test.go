@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	protopolicyv1 "buf.build/gen/go/signal426/protopolicy/protocolbuffers/go/protopolicy/v1"
-	"github.com/signal426/protopolicy/policy"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,8 +21,8 @@ func TestFieldPolicies(t *testing.T) {
 			},
 		}
 		p := ForRequest("createUser", req).
-			WithFieldPolicy("user.id", policy.NeverZero()).
-			WithFieldPolicy("user.first_name", policy.CalculatedTrait(firstNameNotBob))
+			WithFieldPolicy("user.id", NeverZero()).
+			WithFieldPolicy("user.first_name", Calculated(firstNameNotBob))
 		// act
 		err := p.GetViolations(context.Background())
 		// assert

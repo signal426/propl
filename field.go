@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/signal426/protopolicy/policy"
 )
 
 type validationErrHandlerFn func(errs map[string]error) error
@@ -24,19 +22,19 @@ func defaultValidationErrHandlerFn(errs map[string]error) error {
 type fieldPolicy struct {
 	id     string
 	field  *fieldData
-	policy *policy.Policy
+	policy *Policy
 }
 
-func parseID(id string) (string, string) {
-	sp := strings.Split(id, ".")
-	var parsedID, parentPath string
+func parseFieldNameFromPath(path string) (string, string) {
+	sp := strings.Split(path, ".")
+	var parsedName, parentPath string
 	if len(sp) > 1 {
-		parsedID = sp[len(sp)-1]
+		parsedName = sp[len(sp)-1]
 		parentPath = strings.Join(sp[:len(sp)-1], ".")
 	} else {
-		parsedID = sp[0]
+		parsedName = sp[0]
 	}
-	return parsedID, parentPath
+	return parentPath, parsedName
 }
 
 func (r *fieldPolicy) check() error {

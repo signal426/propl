@@ -3,7 +3,6 @@ package protopolicy
 import (
 	"context"
 
-	"github.com/signal426/protopolicy/policy"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -17,11 +16,13 @@ type RequestPolicy[T proto.Message] struct {
 }
 
 func ForRequest[T proto.Message](rpc string, msg T, paths ...string) *RequestPolicy[T] {
+	fieldStore := newFieldStore()
+	fieldStore.fill(msg, paths...)
 	r := &RequestPolicy[T]{
 		rpc:            rpc,
 		requestMessage: msg,
 		fieldPolicies:  []*fieldPolicy{},
-		fieldStore:     messageToFieldStore(msg, ".", paths...),
+		fieldStore:     fieldStore,
 	}
 	return r
 }
@@ -36,10 +37,15 @@ func (r *RequestPolicy[T]) WithAuthorizer(a authorizer[T]) *RequestPolicy[T] {
 	return r
 }
 
-func (r *RequestPolicy[T]) WithFieldPolicy(path string, policy *policy.Policy) *RequestPolicy[T] {
+func (r *RequestPolicy[T]) WithFieldPolicy(path string, policy *Policy) *RequestPolicy[T] {
+	fieldData := r.fieldStore.getByPath(path)
+	if fieldData == nil {
+		fieldData = newUnsetFieldData(path, false)
+		r.fieldStore.add(fieldData)
+	}
 	r.fieldPolicies = append(r.fieldPolicies, &fieldPolicy{
 		policy: policy,
-		field:  r.fieldStore.getByPath(path),
+		field:  fieldData,
 		id:     path,
 	})
 	return r

@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/signal426/protopolicy/policy"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type (
-	fieldStore map[string]*fieldData
-)
+type fieldStore map[string]*fieldData
+
+func newFieldStore() fieldStore {
+	return make(fieldStore)
+}
 
 func (f fieldStore) empty() bool {
 	return f == nil || len(f) == 0
@@ -24,54 +25,64 @@ func (f fieldStore) add(fd *fieldData) {
 func (f fieldStore) getByPath(p string) *fieldData {
 	fd, ok := f[p]
 	if !ok {
-		return nil
+		_, name := parseFieldNameFromPath(p)
+		fd, _ = f[name]
+		return fd
 	}
 	return fd
 }
 
-var _ policy.Subject = (*fieldData)(nil)
+var _ Subject = (*fieldData)(nil)
 
 type fieldData struct {
 	zero   bool
 	val    any
 	path   string
 	inMask bool
+	name   string
+	set    bool
 }
 
 // HasTrait implements policy.Subject.
-func (f *fieldData) HasTrait(t policy.Trait) bool {
-	if t.Trait() == policy.NotZero && f == nil || f.zero {
+func (f *fieldData) HasTrait(t Trait) bool {
+	if t.Trait() == notZero && f.zero {
 		return false
 	}
-	if t.Trait() == policy.NotEq {
+	if t.Trait() == notEq {
 		// todo
 	}
-	if t.Trait() == policy.Calculated {
+	if t.Trait() == calculated {
 		t.Calculate(f.val)
 	}
 	return true
 }
 
 // MeetsConditions implements policy.Subject.
-func (f *fieldData) MeetsConditions(conditions policy.Condition) bool {
-	if f == nil {
-		if conditions.Has(policy.InMessage) {
-			return false
-		}
-		if conditions.Has(policy.InMask) {
-			return false
+func (f *fieldData) MeetsConditions(conditions Condition) bool {
+	if !f.s() {
+		if conditions.Has(InMessage) {
 		}
 	}
 	return true
 }
 
-func newFieldData(value protoreflect.Value, inMask bool, name, parent, delimeter string) *fieldData {
+func newFieldData(value any, valid, inMask bool, name, parent string) *fieldData {
 	if parent != "" {
-		name = fmt.Sprintf("%s%s%s", parent, delimeter, name)
+		name = fmt.Sprintf("%s.%s", parent, name)
 	}
 	return &fieldData{
-		zero:   !value.IsValid() || reflect.ValueOf(value).IsZero(),
+		zero:   !valid || reflect.ValueOf(value).IsZero(),
 		val:    value,
+		path:   name,
+		inMask: inMask,
+		set:    true,
+	}
+}
+
+func newUnsetFieldData(name string, inMask bool) *fieldData {
+	return &fieldData{
+		zero:   true,
+		val:    nil,
 		path:   name,
 		inMask: inMask,
 	}
@@ -89,45 +100,52 @@ func (f fieldData) p() string {
 	return f.path
 }
 
-func messageToFieldStore(message proto.Message, delimeter string, paths ...string) fieldStore {
+func (f fieldData) s() bool {
+	return f.set
+}
+
+func (store fieldStore) fill(message proto.Message, paths ...string) {
 	var pathSet PathSet
 	if len(paths) > 0 {
 		pathSet = NewPathSet(paths...)
 	}
-	return traverseMessageForFieldStore(message, pathSet, nil, true, "", delimeter)
+	fillStore(message, pathSet, store, true, "")
+	if len(pathSet) > 0 {
+		for p := range pathSet {
+			store.add(newUnsetFieldData(p, true))
+		}
+	}
 }
 
-func traverseMessageForFieldStore(message proto.Message, paths PathSet, store fieldStore, init bool, parent string, delimeter string) fieldStore {
-	fmt.Printf("store: %+v\n", store)
+func fillStore(message proto.Message, paths PathSet, store fieldStore, init bool, parent string) {
 	if message == nil || store.empty() && !init {
-		return nil
-	}
-	if init {
-		init = false
-		store = make(map[string]*fieldData)
-	}
-	if message.ProtoReflect().Descriptor().Fields().Len() == 0 {
-		return store
+		return
 	}
 	message.ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
 		fieldValue := message.ProtoReflect().Get(fd)
-		var inMask bool
+		var (
+			inMask bool
+			match  string
+		)
 		if paths != nil {
-			if !paths.Has(string(fd.Name())) {
-				inMask = fd.HasJSONName() && paths.Has(fd.JSONName())
-			} else {
+			if paths.Has(string(fd.Name())) {
 				inMask = true
+				match = string(fd.Name())
+			} else if fd.HasJSONName() && paths.Has(fd.JSONName()) {
+				inMask = true
+				match = fd.JSONName()
+			}
+			if inMask {
+				paths.Remove(match)
 			}
 		}
-		fieldData := newFieldData(fieldValue, inMask, string(fd.Name()), parent, delimeter)
+		fieldData := newFieldData(fieldValue.Interface(), fieldValue.IsValid(), inMask, string(fd.Name()), parent)
 		store.add(fieldData)
-		if fd.Message() == nil {
-			fmt.Printf("got here\n")
+		if fieldData == nil || fd.Message() == nil {
 			return true
 		}
-		fmt.Printf("%+v\n", fieldValue.Message().Interface())
-		traverseMessageForFieldStore(fieldValue.Message().Interface(), paths, store, init, fieldData.p(), delimeter)
+		fillStore(fieldValue.Message().Interface(), paths, store, false, fieldData.p())
 		return true
 	})
-	return store
+	return
 }

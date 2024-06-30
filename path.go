@@ -1,7 +1,5 @@
 package protopolicy
 
-import "google.golang.org/protobuf/proto"
-
 type PathSet map[string]struct{}
 
 // NewPathSet creates a string set.
@@ -23,6 +21,6 @@ func (ps PathSet) Has(e string) bool {
 	return ok
 }
 
-func pathSetFromMsg[T proto.Message](msg T) PathSet {
-	return nil
+func (ps PathSet) Remove(e string) {
+	delete(ps, e)
 }
