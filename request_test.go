@@ -26,7 +26,7 @@ func TestFieldPolicies(t *testing.T) {
 		p := ForRequest("createUser", req).
 			WithFieldPolicy("user.id", NeverZero())
 		// act
-		err := p.GetViolations(context.Background())
+		err := p.E(context.Background())
 		// assert
 		assert.Error(t, err)
 	})
@@ -41,7 +41,7 @@ func TestFieldPolicies(t *testing.T) {
 		p := ForRequest("createUser", req).
 			WithFieldPolicy("user.first_name", Calculated("be equal to bob", firstNameNotBob))
 		// act
-		err := p.GetViolations(context.Background())
+		err := p.E(context.Background())
 		// assert
 		assert.Error(t, err)
 	})
@@ -69,7 +69,7 @@ func TestFieldPolicies(t *testing.T) {
 			WithFieldPolicy("user.primary_address", NeverZeroWhen(InMask)).
 			WithFieldPolicy("user.primary_address.line1", NeverZeroWhen(InMask))
 		// act
-		err := p.GetViolations(context.Background())
+		err := p.E(context.Background())
 		// assert
 		assert.Error(t, err)
 		fmt.Printf("%v", err)

@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-type ViolationsHandler func(errs map[string]error) error
+type InfractionsHandler func(errs map[string]error) error
 
 // defaultValidationErrHandlerFn if no ViolationsHandler specified
-func defaultValidationErrHandlerFn(errs map[string]error) error {
+func defaultInfractionsHandler(errs map[string]error) error {
 	var buffer bytes.Buffer
-	buffer.WriteString("field violations: [\n")
+	buffer.WriteString("field infractions: [\n")
 	for k, v := range errs {
 		buffer.WriteString(fmt.Sprintf("%s: %s\\n\n", k, v.Error()))
 	}

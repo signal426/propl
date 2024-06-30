@@ -36,7 +36,7 @@ func (t trait) calculate(v any) bool {
 	return t.calculation.calculation(v)
 }
 
-func (t trait) violationString() string {
+func (t trait) infractionString() string {
 	if t.traitType == calculated {
 		return fmt.Sprintf("%s", t.calculation.assertion)
 	}

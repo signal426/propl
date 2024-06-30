@@ -13,7 +13,6 @@ err := propl.ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
 		And(propl.Calculated("it should not be equal to bob", firstNameNotBob))). // custom allows you to pass a custom function (must unpack from the empty interface)
 	WithFieldPolicy("user.last_name", propl.NeverZeroWhen(propl.InMask)).
 	WithFieldPolicy("user.primary_address", propl.NeverZeroWhen(propl.InMask)).
-	WithFieldPolicy("user.primary_address.line1", propl.NeverZeroWhen(propl.InMask)).
-	GetViolations(ctx)
+	WithFieldPolicy("user.primary_address.line1", propl.NeverZeroWhen(propl.InMask)).E(ctx) // E shorthand for Evaluate()
 ```
 Any field on the message not specified in the request policy does not get evaluated.

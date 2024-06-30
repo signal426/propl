@@ -7,11 +7,11 @@ import (
 )
 
 type RequestPolicy[T proto.Message] struct {
-	rpc               string
-	requestMessage    T
-	fieldPolicies     []*fieldPolicy
-	fieldStore        fieldStore
-	violationsHandler ViolationsHandler
+	rpc                string
+	requestMessage     T
+	fieldPolicies      []*fieldPolicy
+	fieldStore         fieldStore
+	infractionsHandler InfractionsHandler
 }
 
 func ForRequest[T proto.Message](rpc string, msg T, paths ...string) *RequestPolicy[T] {
@@ -26,10 +26,10 @@ func ForRequest[T proto.Message](rpc string, msg T, paths ...string) *RequestPol
 	return r
 }
 
-// WithViolationsHandler specify how to handle the violations map if there are any
+// WithInfractionsHandler specify how to handle the infractions map if there are any
 // (map[string]error)
-func (r *RequestPolicy[T]) WithViolationsHandler(f ViolationsHandler) *RequestPolicy[T] {
-	r.violationsHandler = f
+func (r *RequestPolicy[T]) WithInfractionsHandler(f InfractionsHandler) *RequestPolicy[T] {
+	r.infractionsHandler = f
 	return r
 }
 
@@ -47,18 +47,26 @@ func (r *RequestPolicy[T]) WithFieldPolicy(path string, policy *Policy) *Request
 	return r
 }
 
-func (r *RequestPolicy[T]) GetViolations(ctx context.Context) error {
-	if r.violationsHandler == nil {
-		r.violationsHandler = defaultValidationErrHandlerFn
+// E shorthand for Evaluate
+func (r *RequestPolicy[T]) E(ctx context.Context) error {
+	return r.Evaluate(ctx)
+}
+
+// Evaluate checks each declared policy and returns an error describing
+// each infraction.
+// To use your own infractionsHandler, specify a handler using WithInfractionsHandler.
+func (r *RequestPolicy[T]) Evaluate(ctx context.Context) error {
+	if r.infractionsHandler == nil {
+		r.infractionsHandler = defaultInfractionsHandler
 	}
-	violations := make(map[string]error)
+	infractions := make(map[string]error)
 	for _, fp := range r.fieldPolicies {
 		if err := fp.check(); err != nil {
-			violations[fp.id] = err
+			infractions[fp.id] = err
 		}
 	}
-	if len(violations) > 0 {
-		return r.violationsHandler(violations)
+	if len(infractions) > 0 {
+		return r.infractionsHandler(infractions)
 	}
 	return nil
 }

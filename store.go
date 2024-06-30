@@ -150,7 +150,7 @@ func fillStore(message proto.Message, paths pathSet, store fieldStore, init bool
 		}
 		fieldData := newFieldData(fieldValue.Interface(), fieldValue.IsValid(), inMask, string(fd.Name()), parent)
 		store.add(fieldData)
-		if fieldData == nil || fd.Message() == nil {
+		if fd.Message() == nil {
 			return true
 		}
 		fillStore(fieldValue.Message().Interface(), paths, store, false, fieldData.p())
