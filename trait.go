@@ -2,60 +2,56 @@ package propl
 
 import "fmt"
 
-type trait uint32
+type traitType uint32
 
 const (
-	notZero trait = iota
+	notZero traitType = iota
 	calculated
 )
 
-func (t *Trait) And(and *Trait) *Trait {
-	t.and = and
+func (t *trait) and(and *trait) *trait {
+	t.andTrait = and
 	return t
 }
 
-func (t *Trait) Or(or *Trait) *Trait {
-	t.or = or
+func (t *trait) or(or *trait) *trait {
+	t.orTrait = or
 	return t
 }
 
-type TraitCalculation struct {
-	Calculation func(any) bool
-	Assertion   string
+type traitCalculation struct {
+	calculation func(any) bool
+	assertion   string
 }
 
-// Trait
-type Trait struct {
-	trait     trait
-	and       *Trait
-	or        *Trait
-	calculate TraitCalculation
+// trait
+type trait struct {
+	traitType   traitType
+	andTrait    *trait
+	orTrait     *trait
+	calculation traitCalculation
 }
 
-func (t Trait) Calculate(v any) bool {
-	return t.calculate.Calculation(v)
+func (t trait) calculate(v any) bool {
+	return t.calculation.calculation(v)
 }
 
-func (t Trait) Trait() trait {
-	return t.trait
-}
-
-func (t Trait) ViolationString() string {
-	if t.trait == calculated {
-		return fmt.Sprintf("%s", t.calculate.Assertion)
+func (t trait) ViolationString() string {
+	if t.traitType == calculated {
+		return fmt.Sprintf("%s", t.calculation.assertion)
 	}
 	return fmt.Sprintf("it should not be zero")
 }
 
-func notZeroTrait() *Trait {
-	return &Trait{
-		trait: notZero,
+func notZeroTrait() *trait {
+	return &trait{
+		traitType: notZero,
 	}
 }
 
-func calculatedTrait(tc TraitCalculation) *Trait {
-	return &Trait{
-		trait:     calculated,
-		calculate: tc,
+func calculatedTrait(tc traitCalculation) *trait {
+	return &trait{
+		traitType:   calculated,
+		calculation: tc,
 	}
 }

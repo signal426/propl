@@ -25,6 +25,9 @@ func (f fieldStore) add(fd *fieldData) {
 func (f fieldStore) getByPath(p string) *fieldData {
 	fd, ok := f[p]
 	if !ok {
+		// we may have a field that was in a mask, but not set in the message.
+		// in this case, we don't know the path, so try fetching by its
+		// name.
 		_, name := parseFieldNameFromPath(p)
 		fd, _ = f[name]
 		return fd
@@ -43,17 +46,17 @@ type fieldData struct {
 }
 
 // HasTrait implements policy.Subject.
-func (f *fieldData) HasTrait(t Trait) bool {
-	if t.Trait() == notZero && f.z() {
+func (f *fieldData) HasTrait(t trait) bool {
+	if t.traitType == notZero && f.z() {
 		return false
 	}
-	if t.Trait() == calculated {
-		return t.Calculate(f.v())
+	if t.traitType == calculated {
+		return t.calculate(f.v())
 	}
 	return true
 }
 
-// MeetsConditions implements policy.Subject.
+// ActionsFromConditions implements policy.Subject.
 func (f *fieldData) ActionFromConditions(conditions Condition) Action {
 	if !f.s() && conditions.Has(InMessage) {
 		return Fail
@@ -109,6 +112,9 @@ func (f fieldData) s() bool {
 	return f.set
 }
 
+// fill fills the store with field data from the request message. It keeps track
+// of the mask paths requested (if present), and creates unset fields for anything
+// specified in the mask but not set on the message.
 func (store fieldStore) fill(message proto.Message, paths ...string) {
 	var pathSet PathSet
 	if len(paths) > 0 {
@@ -122,6 +128,7 @@ func (store fieldStore) fill(message proto.Message, paths ...string) {
 	}
 }
 
+// fillSstore recursively ranges over the fields in the message.
 func fillStore(message proto.Message, paths PathSet, store fieldStore, init bool, parent string) {
 	if message == nil || store.empty() && !init {
 		return

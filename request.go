@@ -26,6 +26,8 @@ func ForRequest[T proto.Message](rpc string, msg T, paths ...string) *RequestPol
 	return r
 }
 
+// WithViolationsHandler specify how to handle the violations map if there are any
+// (map[string]error)
 func (r *RequestPolicy[T]) WithViolationsHandler(f ViolationsHandler) *RequestPolicy[T] {
 	r.violationsHandler = f
 	return r

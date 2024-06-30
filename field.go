@@ -9,6 +9,7 @@ import (
 
 type ViolationsHandler func(errs map[string]error) error
 
+// defaultValidationErrHandlerFn if no ViolationsHandler specified
 func defaultValidationErrHandlerFn(errs map[string]error) error {
 	var buffer bytes.Buffer
 	buffer.WriteString("field violations: [\n")
@@ -19,12 +20,15 @@ func defaultValidationErrHandlerFn(errs map[string]error) error {
 	return errors.New(buffer.String())
 }
 
+// fieldPolicy ties field data to a policy
 type fieldPolicy struct {
 	id     string
 	field  *fieldData
 	policy *Policy
 }
 
+// parseFieldNameFromPath parses the target field's name from a "." delimited path.
+// returns the parent path and the field's name respectively.
 func parseFieldNameFromPath(path string) (string, string) {
 	sp := strings.Split(path, ".")
 	var parsedName, parentPath string

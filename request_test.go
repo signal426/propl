@@ -49,7 +49,7 @@ func TestFieldPolicies(t *testing.T) {
 		// arrange
 		req := &proplv1.UpdateUserRequest{
 			User: &proplv1.User{
-				FirstName: "frank",
+				FirstName: "bob",
 				PrimaryAddress: &proplv1.Address{
 					Line1: "a",
 					Line2: "b",
