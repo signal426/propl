@@ -86,7 +86,7 @@ func (p *Policy) checkTraits(s Subject, trait *trait) error {
 			return p.checkTraits(s, trait.orTrait)
 		}
 		// else, we're done checking
-		return errors.New(trait.ViolationString())
+		return errors.New(trait.violationString())
 	}
 	// if there's an and condition, keep going
 	// else, we're done
