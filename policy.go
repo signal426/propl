@@ -53,6 +53,10 @@ func (p *Policy) Or(or *Policy) *Policy {
 }
 
 // Calculated runs the specified function if field is set.
+//
+// A Calculated Policy is a composition of a calculation function and an assertion message.
+// The function receives the interface value of the proto field and returns wether or not
+// the assertion is true.
 func Calculated(assertion string, calc func(any) bool) *Policy {
 	return &Policy{
 		traits: calculatedTrait(traitCalculation{
@@ -64,6 +68,10 @@ func Calculated(assertion string, calc func(any) bool) *Policy {
 }
 
 // CalculatedWhen runs the specified function when the conditions apply.
+//
+// A Calculated Policy is a composition of a calculation function and an assertion message.
+// The function receives the interface value of the proto field and returns wether or not
+// the assertion is true.
 func CalculatedWhen(assertion string, calc func(any) bool, c Condition) *Policy {
 	return &Policy{
 		traits: calculatedTrait(traitCalculation{

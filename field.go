@@ -9,7 +9,7 @@ import (
 
 type FieldInfractionsHandler func(errs map[string]error) error
 
-// defaultValidationErrHandlerFn if no InfractionsHandler specified
+// defaultFieldInfractionsHandler if no FieldInfractionsHandler specified
 func defaultFieldInfractionsHandler(errs map[string]error) error {
 	var buffer bytes.Buffer
 	buffer.WriteString("field infractions: [\n")
