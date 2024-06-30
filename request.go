@@ -2,7 +2,6 @@ package propl
 
 import (
 	"context"
-	"fmt"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -47,7 +46,6 @@ func (r *RequestPolicy[T]) WithFieldPolicy(path string, policy *Policy) *Request
 }
 
 func (r *RequestPolicy[T]) GetViolations(ctx context.Context) error {
-	fmt.Printf("%+v\n", r.fieldStore)
 	if r.violationsHandler == nil {
 		r.violationsHandler = defaultValidationErrHandlerFn
 	}
