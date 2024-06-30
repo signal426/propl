@@ -1,5 +1,5 @@
 version: v1
-name: buf.build/signal426/protopolicy
+name: buf.build/signal426/propl
 breaking:
   use:
     - FILE

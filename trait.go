@@ -1,5 +1,22 @@
 package propl
 
+type trait uint32
+
+const (
+	notZero trait = iota
+	calculated
+)
+
+func (t *Trait) And(and *Trait) *Trait {
+	t.and = and
+	return t
+}
+
+func (t *Trait) Or(or *Trait) *Trait {
+	t.or = or
+	return t
+}
+
 type TraitCalculation func(any) bool
 
 type Trait struct {
@@ -28,21 +45,4 @@ func calculatedTrait(tc TraitCalculation) *Trait {
 		trait:     calculated,
 		calculate: tc,
 	}
-}
-
-type trait uint32
-
-const (
-	notZero trait = iota
-	calculated
-)
-
-func (t *Trait) And(and *Trait) *Trait {
-	t.and = and
-	return t
-}
-
-func (t *Trait) Or(or *Trait) *Trait {
-	t.or = or
-	return t
 }
