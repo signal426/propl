@@ -1,4 +1,4 @@
-module github.com/signal426/protopolicy
+module github.com/signal426/propl
 
 go 1.21.4
 
