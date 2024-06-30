@@ -1,4 +1,4 @@
-package protopolicy
+package propl
 
 type TraitCalculation func(any) bool
 
@@ -34,7 +34,6 @@ type trait uint32
 
 const (
 	notZero trait = iota
-	notEq
 	calculated
 )
 

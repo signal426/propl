@@ -1,4 +1,4 @@
-package protopolicy
+package propl
 
 import (
 	"testing"

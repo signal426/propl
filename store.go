@@ -1,4 +1,4 @@
-package protopolicy
+package propl
 
 import (
 	"fmt"
@@ -47,9 +47,6 @@ type fieldData struct {
 func (f *fieldData) HasTrait(t Trait) bool {
 	if t.Trait() == notZero && f.zero {
 		return false
-	}
-	if t.Trait() == notEq {
-		// todo
 	}
 	if t.Trait() == calculated {
 		t.Calculate(f.val)

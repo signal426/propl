@@ -1,4 +1,4 @@
-package protopolicy
+package propl
 
 import (
 	"google.golang.org/protobuf/proto"
