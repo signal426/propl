@@ -29,7 +29,7 @@ type Propl[T proto.Message] struct {
 
 // ForMessage creates a new policy aggregate that can be built upon using the
 // builder methods.
-func ForMessage[T proto.Message](msg T, paths ...string) *Propl[T] {
+func For[T proto.Message](msg T, paths ...string) *Propl[T] {
 	fieldStore := newFieldStore()
 	fieldStore.fill(msg, paths...)
 	r := &Propl[T]{
