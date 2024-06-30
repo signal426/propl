@@ -118,7 +118,7 @@ func (f fieldData) s() bool {
 func (store fieldStore) fill(message proto.Message, paths ...string) {
 	pathSet := newPathSet(paths...)
 	fillStore(message, pathSet, store, true, "")
-	// we have unclaimed paths, create unset fields from them
+	// if we have unclaimed paths, create unset fields from them
 	for _, uc := range pathSet.unclaimed() {
 		store.add(newUnsetFieldData(uc, true))
 	}
