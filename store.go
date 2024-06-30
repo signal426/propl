@@ -39,7 +39,6 @@ type fieldData struct {
 	val    any
 	path   string
 	inMask bool
-	name   string
 	set    bool
 }
 
@@ -56,11 +55,13 @@ func (f *fieldData) HasTrait(t Trait) bool {
 
 // MeetsConditions implements policy.Subject.
 func (f *fieldData) MeetsConditions(conditions Condition) bool {
-	if !f.s() {
-		if conditions.Has(InMessage) {
-		}
+	if f.s() && conditions.Has(InMessage) {
+		return true
 	}
-	return true
+	if f.s() && conditions.Has(InMask) && f.inMask {
+		return true
+	}
+	return false
 }
 
 func newFieldData(value any, valid, inMask bool, name, parent string) *fieldData {

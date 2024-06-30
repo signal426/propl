@@ -43,24 +43,28 @@ func CalculatedWhen(tc TraitCalculation, c Condition) *Policy {
 }
 
 func (p *Policy) Execute(s Subject) error {
-	if s.MeetsConditions(p.conditions) && p.traits != nil {
-		return p.checkTraits(s, p.traits, nil)
+	if s.MeetsConditions(p.conditions) {
+		return p.checkTraits(s, p.traits)
 	}
-	return fmt.Errorf("does not meet conditions")
+	return nil
 }
 
-func (p *Policy) checkTraits(s Subject, trait *Trait, prev *Trait) error {
+func (p *Policy) checkTraits(s Subject, trait *Trait) error {
 	if trait == nil {
 		return nil
 	}
 	if !s.HasTrait(*trait) {
+		// if we have an or, keep going
 		if trait.or != nil {
-			return p.checkTraits(s, trait.or, trait)
+			return p.checkTraits(s, trait.or)
 		}
+		// else, we're done checking
 		return fmt.Errorf("does not meet policy")
 	}
+	// if there's an and condition, keep going
+	// else, we're done
 	if trait.and != nil {
-		return p.checkTraits(s, trait.and, trait)
+		return p.checkTraits(s, trait.and)
 	}
 	return nil
 }
