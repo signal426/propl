@@ -33,6 +33,8 @@ func (r *RequestPolicy[T]) WithInfractionsHandler(f InfractionsHandler) *Request
 	return r
 }
 
+// WithFieldPolicy adds a field policy for the request. Accepts a "." delimited location to the
+// field to which the policy applies.
 func (r *RequestPolicy[T]) WithFieldPolicy(path string, policy *Policy) *RequestPolicy[T] {
 	fieldData := r.fieldStore.getByPath(path)
 	if fieldData == nil {
