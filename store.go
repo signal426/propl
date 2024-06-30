@@ -62,6 +62,7 @@ func (f *fieldData) ActionFromConditions(conditions Condition) Action {
 		return Fail
 	}
 	if !conditions.Has(InMessage) && conditions.Has(InMask) && !f.m() {
+		fmt.Printf("skipping %s\n", f.p())
 		return Skip
 	}
 	return Check

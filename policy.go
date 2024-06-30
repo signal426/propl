@@ -1,6 +1,7 @@
 package propl
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -26,6 +27,18 @@ func NeverZeroWhen(c Condition) *Policy {
 		traits:     notZeroTrait(),
 		conditions: c,
 	}
+}
+
+func (p *Policy) And(and *Policy) *Policy {
+	p.traits.And(and.traits)
+	p.conditions.And(and.conditions)
+	return p
+}
+
+func (p *Policy) Or(or *Policy) *Policy {
+	p.traits.Or(or.traits)
+	p.conditions.Or(or.conditions)
+	return p
 }
 
 func Calculated(tc TraitCalculation) *Policy {
@@ -63,7 +76,7 @@ func (p *Policy) checkTraits(s Subject, trait *Trait) error {
 			return p.checkTraits(s, trait.or)
 		}
 		// else, we're done checking
-		return fmt.Errorf("does not have trait %s", trait.Trait().String())
+		return errors.New(trait.ViolationString())
 	}
 	// if there's an and condition, keep going
 	// else, we're done
