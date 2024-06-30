@@ -41,16 +41,22 @@ func (p *Policy) Or(or *Policy) *Policy {
 	return p
 }
 
-func Calculated(tc TraitCalculation) *Policy {
+func Calculated(assertion string, calc func(any) bool) *Policy {
 	return &Policy{
-		traits:     calculatedTrait(tc),
+		traits: calculatedTrait(TraitCalculation{
+			Assertion:   assertion,
+			Calculation: calc,
+		}),
 		conditions: InMessage.And(InMask),
 	}
 }
 
-func CalculatedWhen(tc TraitCalculation, c Condition) *Policy {
+func CalculatedWhen(assertion string, calc func(any) bool, c Condition) *Policy {
 	return &Policy{
-		traits:     calculatedTrait(tc),
+		traits: calculatedTrait(TraitCalculation{
+			Assertion:   assertion,
+			Calculation: calc,
+		}),
 		conditions: c,
 	}
 }

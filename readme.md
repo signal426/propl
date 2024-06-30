@@ -5,7 +5,7 @@ not slow, it achieves a nice API through reflection and recursion, so not the sa
 
 ###  Usage
 Example:
-```
+```go
 // construct with the rpc name, the request message we're validating, and the mask paths (if any)
 p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
 	WithFieldPolicy("user.id", NeverZero()). // NeverZero asserts field is not zero in any situation (message or in mask)

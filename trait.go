@@ -21,7 +21,7 @@ func (t *Trait) Or(or *Trait) *Trait {
 
 type TraitCalculation struct {
 	Calculation func(any) bool
-	ItShouldNot string
+	Assertion   string
 }
 
 // Trait
@@ -42,7 +42,7 @@ func (t Trait) Trait() trait {
 
 func (t Trait) ViolationString() string {
 	if t.trait == calculated {
-		return fmt.Sprintf("it should not %s", t.calculate.ItShouldNot)
+		return fmt.Sprintf("%s", t.calculate.Assertion)
 	}
 	return fmt.Sprintf("it should not be zero")
 }

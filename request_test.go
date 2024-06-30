@@ -2,7 +2,6 @@ package propl
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -39,7 +38,7 @@ func TestFieldPolicies(t *testing.T) {
 			},
 		}
 		p := ForRequest("createUser", req).
-			WithFieldPolicy("user.first_name", Calculated(TraitCalculation{ItShouldNot: "be equal to bob", Calculation: firstNameNotBob}))
+			WithFieldPolicy("user.first_name", Calculated("be equal to bob", firstNameNotBob))
 		// act
 		err := p.GetViolations(context.Background())
 		// assert
@@ -50,7 +49,7 @@ func TestFieldPolicies(t *testing.T) {
 		// arrange
 		req := &proplv1.UpdateUserRequest{
 			User: &proplv1.User{
-				FirstName: "bob",
+				FirstName: "frank",
 				PrimaryAddress: &proplv1.Address{
 					Line1: "a",
 					Line2: "b",
@@ -63,7 +62,7 @@ func TestFieldPolicies(t *testing.T) {
 		p := ForRequest("createUser", req, req.GetUpdateMask().GetPaths()...).
 			WithFieldPolicy("user.id", NeverZero()).
 			WithFieldPolicy("user.first_name", NeverZeroWhen(InMask).
-				And(Calculated(TraitCalculation{ItShouldNot: "be equal to bob", Calculation: firstNameNotBob}))).
+				And(Calculated("it should not be equal to bob", firstNameNotBob))).
 			WithFieldPolicy("user.last_name", NeverZeroWhen(InMask)).
 			WithFieldPolicy("user.primary_address", NeverZeroWhen(InMask)).
 			WithFieldPolicy("user.primary_address.line1", NeverZeroWhen(InMask))
@@ -71,6 +70,5 @@ func TestFieldPolicies(t *testing.T) {
 		err := p.GetViolations(context.Background())
 		// assert
 		assert.Error(t, err)
-		fmt.Printf(err.Error())
 	})
 }
