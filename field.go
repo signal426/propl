@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-type InfractionsHandler func(errs map[string]error) error
+type FieldInfractionsHandler func(errs map[string]error) error
 
 // defaultValidationErrHandlerFn if no ViolationsHandler specified
-func defaultInfractionsHandler(errs map[string]error) error {
+func defaultFieldInfractionsHandler(errs map[string]error) error {
 	var buffer bytes.Buffer
 	buffer.WriteString("field infractions: [\n")
 	for k, v := range errs {
@@ -18,13 +18,6 @@ func defaultInfractionsHandler(errs map[string]error) error {
 	}
 	buffer.WriteString("]\n")
 	return errors.New(buffer.String())
-}
-
-// fieldPolicy ties field data to a policy
-type fieldPolicy struct {
-	id     string
-	field  *fieldData
-	policy *Policy
 }
 
 // parseFieldNameFromPath parses the target field's name from a "." delimited path.
@@ -39,8 +32,4 @@ func parseFieldNameFromPath(path string) (string, string) {
 		parsedName = sp[0]
 	}
 	return parentPath, parsedName
-}
-
-func (r *fieldPolicy) check() error {
-	return r.policy.Execute(r.field)
 }
