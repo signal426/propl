@@ -8,22 +8,18 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[InMessage-0]
+	_ = x[InMessage-1]
 	_ = x[InMask-2]
 }
 
-const (
-	_Condition_name_0 = "InMessage"
-	_Condition_name_1 = "InMask"
-)
+const _Condition_name = "InMessageInMask"
+
+var _Condition_index = [...]uint8{0, 9, 15}
 
 func (i Condition) String() string {
-	switch {
-	case i == 0:
-		return _Condition_name_0
-	case i == 2:
-		return _Condition_name_1
-	default:
-		return "Condition(" + strconv.FormatInt(int64(i), 10) + ")"
+	i -= 1
+	if i >= Condition(len(_Condition_index)-1) {
+		return "Condition(" + strconv.FormatInt(int64(i+1), 10) + ")"
 	}
+	return _Condition_name[_Condition_index[i]:_Condition_index[i+1]]
 }

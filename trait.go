@@ -19,6 +19,7 @@ func (t *Trait) Or(or *Trait) *Trait {
 
 type TraitCalculation func(any) bool
 
+// Trait
 type Trait struct {
 	trait     trait
 	and       *Trait

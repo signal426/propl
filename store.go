@@ -44,24 +44,27 @@ type fieldData struct {
 
 // HasTrait implements policy.Subject.
 func (f *fieldData) HasTrait(t Trait) bool {
-	if t.Trait() == notZero && f.zero {
+	if t.Trait() == notZero && f.z() {
 		return false
 	}
 	if t.Trait() == calculated {
-		t.Calculate(f.val)
+		return t.Calculate(f.v())
 	}
 	return true
 }
 
 // MeetsConditions implements policy.Subject.
-func (f *fieldData) MeetsConditions(conditions Condition) bool {
-	if f.s() && conditions.Has(InMessage) {
-		return true
+func (f *fieldData) ActionFromConditions(conditions Condition) Action {
+	if !f.s() && conditions.Has(InMessage) {
+		return Fail
 	}
-	if f.s() && conditions.Has(InMask) && f.inMask {
-		return true
+	if !f.s() && conditions.Has(InMask) && f.m() {
+		return Fail
 	}
-	return false
+	if !conditions.Has(InMessage) && conditions.Has(InMask) && !f.m() {
+		return Skip
+	}
+	return Check
 }
 
 func newFieldData(value any, valid, inMask bool, name, parent string) *fieldData {
@@ -88,6 +91,10 @@ func newUnsetFieldData(name string, inMask bool) *fieldData {
 
 func (f fieldData) z() bool {
 	return f.zero
+}
+
+func (f fieldData) m() bool {
+	return f.inMask
 }
 
 func (f fieldData) v() any {

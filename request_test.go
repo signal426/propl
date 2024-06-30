@@ -43,7 +43,6 @@ func TestFieldPolicies(t *testing.T) {
 			WithFieldPolicy("user.first_name", Calculated(firstNameNotBob))
 		// act
 		err := p.GetViolations(context.Background())
-		// fmt.Printf(err.Error())
 		// assert
 		assert.Error(t, err)
 	})
