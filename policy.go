@@ -1,13 +1,14 @@
 package propl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
 )
 
-type Precheck[T proto.Message] func(msg T) error
+type Precheck[T proto.Message] func(ctx context.Context, msg T) error
 
 type Subject interface {
 	HasTrait(t trait) bool

@@ -91,8 +91,7 @@ func (r *Propl[T]) E(ctx context.Context) error {
 // To use your own infractionsHandler, specify a handler using WithInfractionsHandler.
 func (r *Propl[T]) Evaluate(ctx context.Context) error {
 	if r.precheck != nil {
-		// if
-		if err := r.precheck(r.requestMessage); err != nil {
+		if err := r.precheck(ctx, r.requestMessage); err != nil {
 			return err
 		}
 	}

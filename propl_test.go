@@ -113,7 +113,7 @@ func TestFieldPolicies(t *testing.T) {
 
 	t.Run("it should validate with precheck", func(t *testing.T) {
 		// arrange
-		authorizeUpdate := func(msg *proplv1.UpdateUserRequest) error {
+		authorizeUpdate := func(_ context.Context, msg *proplv1.UpdateUserRequest) error {
 			if msg.GetUser().GetId() != "abc123" {
 				return errors.New("can only update user abc123")
 			}
