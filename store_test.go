@@ -18,7 +18,9 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 		}
 		// act
 		s := newFieldStore[*proplv1.CreateUserRequest](msg)
-		s.populate([]string{"user.first_name", "user.id", "user.last_name"})
+		s.loadFieldsFromPath("user.first_name").
+			loadFieldsFromPath("user.id").
+			loadFieldsFromPath("user.last_name")
 		// assert
 		id := s.getByPath("user.id")
 		fn := s.getByPath("user.first_name")
@@ -52,7 +54,12 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 		}
 		// act
 		s := newFieldStore[*proplv1.CreateUserRequest](msg)
-		s.populate([]string{"user.first_name", "user.id", "user.last_name", "user.primary_address", "user.primary_address.line1", "user.primary_address.line2"})
+		s.loadFieldsFromPath("user.id").
+			loadFieldsFromPath("user.first_name").
+			loadFieldsFromPath("user.last_name").
+			loadFieldsFromPath("user.primary_address").
+			loadFieldsFromPath("user.primary_address.line1").
+			loadFieldsFromPath("user.primary_address.line2")
 		// spew.Dump(s)
 		// assert
 		id := s.getByPath("user.id")

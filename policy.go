@@ -23,32 +23,42 @@ type Trait interface {
 	Valid() bool
 }
 
-type Policy struct {
+type Policy interface {
+	Execute() error
+	EvaluateSubjectTraits() error
+}
+
+type policy struct {
+	subject    Subject
 	conditions Condition
 	traits     Trait
 }
 
 // Execute checks traits on the field based on the conditional action signal
 // returned from the subject.
-func (p *Policy) Execute(s Subject) error {
-	switch s.ConditionalAction(p.conditions) {
+func (p *policy) Execute() error {
+	switch p.subject.ConditionalAction(p.conditions) {
 	case Skip:
 		return nil
 	case Fail:
 		return fmt.Errorf("subject did not meet conditions %s", p.conditions.FlagsString())
 	default:
-		return p.checkTraits(s, p.traits)
+		return p.EvaluateSubjectTraits()
 	}
 }
 
-func (p *Policy) checkTraits(s Subject, t Trait) error {
+func (p *policy) EvaluateSubjectTraits() error {
+	return p.checkTraits(p.traits)
+}
+
+func (p *policy) checkTraits(t Trait) error {
 	if t == nil {
 		return nil
 	}
-	if t.Valid() && !s.HasTrait(t) {
+	if t.Valid() && !p.subject.HasTrait(t) {
 		// if we have an or, keep going
 		if t.Or().Valid() {
-			return p.checkTraits(s, t.Or())
+			return p.checkTraits(t.Or())
 		}
 		// else, we're done checking
 		return errors.New(t.InfractionsString())
@@ -56,7 +66,29 @@ func (p *Policy) checkTraits(s Subject, t Trait) error {
 	// if there's an and condition, keep going
 	// else, we're done
 	if t.And().Valid() {
-		return p.checkTraits(s, t.And())
+		return p.checkTraits(t.And())
 	}
 	return nil
+}
+
+type customPolicy[T proto.Message] struct {
+	arg        T
+	subject    Subject
+	conditions Condition
+	f          func(t T) error
+}
+
+func (mp *customPolicy[T]) Execute() error {
+	switch mp.subject.ConditionalAction(mp.conditions) {
+	case Skip:
+		return nil
+	case Fail:
+		return fmt.Errorf("subject did not meet conditions %s", mp.conditions.FlagsString())
+	default:
+		return mp.EvaluateSubjectTraits()
+	}
+}
+
+func (mp *customPolicy[T]) EvaluateSubjectTraits() error {
+	return mp.f(mp.arg)
 }

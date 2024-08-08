@@ -3,13 +3,12 @@ package propl
 import (
 	"context"
 
-	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 )
 
 // Propl is an aggregation of policies on some proto message.
 type Propl[T proto.Message] struct {
-	policies                map[string]*Policy
+	policies                map[string]Policy
 	fieldStore              *fieldStore[T]
 	fieldInfractionsHandler FieldInfractionsHandler
 	precheck                Precheck[T]
@@ -19,8 +18,8 @@ type Propl[T proto.Message] struct {
 // builder methods.
 func For[T proto.Message](msg T, paths ...string) *Propl[T] {
 	r := &Propl[T]{
-		fieldStore: newFieldStore(msg),
-		policies:   make(map[string]*Policy),
+		fieldStore: newFieldStore(msg, paths...),
+		policies:   make(map[string]Policy),
 	}
 	return r
 }
@@ -39,57 +38,62 @@ func (r *Propl[T]) WithPrecheckPolicy(p Precheck[T]) *Propl[T] {
 }
 
 func (r *Propl[T]) FieldPolicy(path string, traits Trait, conditions Condition) *Propl[T] {
-	r.policies[path] = &Policy{
+	r.policies[path] = &policy{
 		conditions: conditions,
 		traits:     traits,
 	}
 	return r
 }
 
-// WithFieldPolicy adds a field policy for the request. Accepts a "." delimited location to the
-// field to which the policy applies.
-// Duplicate path entries results in the last policy set to be the one applied.
+// NeverZero validates that the field at the provided path
+// is always (in body or mask) non-zero
 func (r *Propl[T]) NeverZero(path string) *Propl[T] {
-	fp := &Policy{
+	fp := &policy{
+		subject:    r.fieldStore.loadFieldsFromPath(path).getByPath(path),
 		conditions: InMask.And(InMessage),
-		traits: &fieldTrait{
-			fieldTraitType: NotZero,
+		traits: &trait{
+			traitType: NotZero,
 		},
 	}
 	r.policies[path] = fp
 	return r
 }
 
+// NeverZeroWhen validates that the field at the provided location is
+// not zero under the provided conditions (e.g. in a field mask)
 func (r *Propl[T]) NeverZeroWhen(path string, conditions Condition) *Propl[T] {
-	fp := &Policy{
+	fp := &policy{
+		subject:    r.fieldStore.loadFieldsFromPath(path).getByPath(path),
 		conditions: conditions,
-		traits: &fieldTrait{
-			fieldTraitType: NotZero,
+		traits: &trait{
+			traitType: NotZero,
 		},
 	}
 	r.policies[path] = fp
 	return r
 }
 
-func (r *Propl[T]) NeverEq(path string, v any) *Propl[T] {
-	fp := &Policy{
+// CustomEval asserts the field is always present and set before running
+// a user-provided function that receives the entire message as an arg
+func (r *Propl[T]) CustomEval(path string, c func(t T) error) *Propl[T] {
+	fp := &customPolicy[T]{
 		conditions: InMask.And(InMessage),
-		traits: &fieldTrait{
-			fieldTraitType: NotEqual,
-			notEq:          v,
-		},
+		arg:        r.fieldStore.message(),
+		subject:    r.fieldStore.loadFieldsFromPath(path).getByPath(path),
+		f:          c,
 	}
 	r.policies[path] = fp
 	return r
 }
 
-func (r *Propl[T]) NeverEqWhen(path string, conditions Condition, v any) *Propl[T] {
-	fp := &Policy{
+// CustomEvalWhen runs a custom eval function that receives the entire message as an arg
+// when the field at the specified location meets the specified conditions
+func (r *Propl[T]) CustomEvalWhen(path string, conditions Condition, c func(t T) error) *Propl[T] {
+	fp := &customPolicy[T]{
 		conditions: conditions,
-		traits: &fieldTrait{
-			fieldTraitType: NotEqual,
-			notEq:          v,
-		},
+		arg:        r.fieldStore.message(),
+		subject:    r.fieldStore.loadFieldsFromPath(path).getByPath(path),
+		f:          c,
 	}
 	r.policies[path] = fp
 	return r
@@ -111,14 +115,11 @@ func (r *Propl[T]) Evaluate(ctx context.Context) error {
 			return err
 		}
 	}
-	// populate the store based on the validation fields
-	// and the message
-	r.fieldStore.populate(maps.Keys(r.policies))
 	// ensure some handler is set
 	r.ensureFieldInfractionsHandler()
 	finfractions := make(map[string]error)
 	for id, p := range r.policies {
-		if err := p.Execute(r.fieldStore.getByPath(id)); err != nil {
+		if err := p.Execute(); err != nil {
 			finfractions[id] = err
 		}
 	}

@@ -10,19 +10,38 @@ import (
 )
 
 type fieldStore[T proto.Message] struct {
-	msg   T
-	store map[string]*fieldData
+	msg            T
+	maskPathLookup map[string]struct{}
+	store          map[string]*fieldData
 }
 
-func newFieldStore[T proto.Message](msg T) *fieldStore[T] {
+func newFieldStore[T proto.Message](msg T, maskPaths ...string) *fieldStore[T] {
+	pathLookup := make(map[string]struct{})
+	for _, p := range maskPaths {
+		pathLookup[p] = struct{}{}
+	}
 	return &fieldStore[T]{
-		msg:   msg,
-		store: make(map[string]*fieldData),
+		msg:            msg,
+		store:          make(map[string]*fieldData),
+		maskPathLookup: pathLookup,
 	}
 }
 
 func (f fieldStore[T]) message() T {
 	return f.msg
+}
+
+func (f fieldStore[T]) isFieldInMask(p string) bool {
+	if _, im := f.maskPathLookup[p]; im {
+		return im
+	}
+	if s := strings.Split(p, "."); len(s) > 0 {
+		if _, im := f.maskPathLookup[s[len(s)-1]]; im {
+			return im
+		}
+		// todo: check json name
+	}
+	return false
 }
 
 func (f fieldStore[T]) empty() bool {
@@ -57,13 +76,7 @@ type fieldData struct {
 
 // HasTrait implements policy.Subject.
 func (f *fieldData) HasTrait(t Trait) bool {
-	if t.Type() == NotZero && f.z() {
-		return false
-	}
-	if t.Type() == NotEqual {
-		return f.v() != t.NotEqVal()
-	}
-	return true
+	return t.Type() == NotZero && f.z()
 }
 
 // ConditionalAction implements policy.Subject.
@@ -120,22 +133,14 @@ func (f fieldData) s() bool {
 	return f.set
 }
 
-// fill fills the store with field data from the request message. It keeps track
-// of the mask paths requested (if present), and creates unset fields for anything
-// specified in the mask but not set on the message.
-func (store *fieldStore[T]) populate(policyFields []string, paths ...string) {
-	pathLookup := make(map[string]struct{})
-	for _, p := range paths {
-		pathLookup[p] = struct{}{}
-	}
-	for _, f := range policyFields {
-		_, im := pathLookup[f]
-		store.populateRecursive(store.msg, store.msg.ProtoReflect().Descriptor(), im, f, "")
-	}
+// loadFieldsFromPath loads the data store with field data for each field
+// in the path
+func (store *fieldStore[T]) loadFieldsFromPath(field string) *fieldStore[T] {
+	store.loadFieldsFromPathRecursive(store.msg, store.msg.ProtoReflect().Descriptor(), store.isFieldInMask(field), field, "")
+	return store
 }
 
-// fillStore recursively ranges over the fields in the message.
-func (store *fieldStore[T]) populateRecursive(message proto.Message, desc protoreflect.MessageDescriptor, inMask bool, field, traversed string) {
+func (store *fieldStore[T]) loadFieldsFromPathRecursive(message proto.Message, desc protoreflect.MessageDescriptor, inMask bool, field, traversed string) {
 	if message == nil || desc == nil || field == "" || field == "." {
 		return
 	}
@@ -177,7 +182,7 @@ func (store *fieldStore[T]) populateRecursive(message proto.Message, desc protor
 	if fieldValue.Message() == nil {
 		return
 	}
-	store.populateRecursive(
+	store.loadFieldsFromPathRecursive(
 		fieldValue.Message().Interface(),
 		fieldValue.Message().Descriptor(),
 		inMask,

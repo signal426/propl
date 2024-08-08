@@ -11,46 +11,41 @@ const (
 	NotEqual
 )
 
-var _ Trait = (*fieldTrait)(nil)
+var _ Trait = (*trait)(nil)
 
-// fieldTrait
-type fieldTrait struct {
-	fieldTraitType TraitType
-	notEq          any
-	andTrait       *fieldTrait
-	orTrait        *fieldTrait
+// trait
+type trait struct {
+	traitType TraitType
+	andTrait  *trait
+	orTrait   *trait
 }
 
-func (t *fieldTrait) and(and *fieldTrait) *fieldTrait {
+func (t *trait) and(and *trait) *trait {
 	t.andTrait = and
 	return t
 }
 
-func (t fieldTrait) NotEqVal() any {
-	return t.notEq
-}
-
-func (t *fieldTrait) And() Trait {
+func (t *trait) And() Trait {
 	return t.andTrait
 }
 
-func (t fieldTrait) Type() TraitType {
-	return t.fieldTraitType
+func (t trait) Type() TraitType {
+	return t.traitType
 }
 
-func (t *fieldTrait) Or() Trait {
+func (t *trait) Or() Trait {
 	return t.orTrait
 }
 
-func (t *fieldTrait) Valid() bool {
+func (t *trait) Valid() bool {
 	return t != nil
 }
 
-func (t *fieldTrait) or(or *fieldTrait) *fieldTrait {
+func (t *trait) or(or *trait) *trait {
 	t.orTrait = or
 	return t
 }
 
-func (t *fieldTrait) InfractionsString() string {
+func (t *trait) InfractionsString() string {
 	return fmt.Sprintf("it should not be zero")
 }

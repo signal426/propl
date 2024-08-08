@@ -33,7 +33,12 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := For(req).NeverEq("user.first_name", "Bob")
+		p := For(req).CustomEval("user.first_name", func(t *proplv1.CreateUserRequest) error {
+			if t.GetUser().GetFirstName() == "Bob" {
+				return errors.New("cant be bob")
+			}
+			return nil
+		})
 		// act
 		err := p.E(context.Background())
 		// assert
@@ -85,7 +90,7 @@ func TestFieldPolicies(t *testing.T) {
 				},
 			},
 			UpdateMask: &fieldmaskpb.FieldMask{
-				Paths: []string{"first_name", "last_name"},
+				Paths: []string{"first_name", "last_name", "line1"},
 			},
 		}
 		p := For(req, req.GetUpdateMask().GetPaths()...).
@@ -95,7 +100,12 @@ func TestFieldPolicies(t *testing.T) {
 			NeverZeroWhen("user.first_name", InMask).
 			NeverZeroWhen("user.last_name", InMask).
 			NeverZeroWhen("user.primary_address", InMask).
-			NeverZeroWhen("user.primary_address.line1", InMask)
+			CustomEvalWhen("user.primary_address.line1", InMask, func(t *proplv1.UpdateUserRequest) error {
+				if t.GetUser().GetPrimaryAddress().GetLine1() == "a" {
+					return errors.New("cannot be a")
+				}
+				return nil
+			})
 		// act
 		err := p.E(context.Background())
 		// assert
