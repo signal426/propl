@@ -3,33 +3,44 @@ package propl
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type fieldStore map[string]*fieldData
-
-func newFieldStore() fieldStore {
-	return make(fieldStore)
+type fieldStore[T proto.Message] struct {
+	msg   T
+	store map[string]*fieldData
 }
 
-func (f fieldStore) empty() bool {
-	return f == nil || len(f) == 0
+func newFieldStore[T proto.Message](msg T) *fieldStore[T] {
+	return &fieldStore[T]{
+		msg:   msg,
+		store: make(map[string]*fieldData),
+	}
 }
 
-func (f fieldStore) add(fd *fieldData) {
-	f[fd.p()] = fd
+func (f fieldStore[T]) message() T {
+	return f.msg
 }
 
-func (f fieldStore) getByPath(p string) *fieldData {
-	fd, ok := f[p]
+func (f fieldStore[T]) empty() bool {
+	return f.store == nil || len(f.store) == 0
+}
+
+func (f *fieldStore[T]) add(fd *fieldData) {
+	f.store[fd.p()] = fd
+}
+
+func (f fieldStore[T]) getByPath(p string) *fieldData {
+	fd, ok := f.store[p]
 	if !ok {
 		// we may have a field that was in a mask, but not set in the message.
 		// in this case, we don't know the path, so try fetching by its
 		// name.
 		_, name := parseFieldNameFromPath(p)
-		fd, _ = f[name]
+		fd, _ = f.store[name]
 		return fd
 	}
 	return fd
@@ -38,20 +49,19 @@ func (f fieldStore) getByPath(p string) *fieldData {
 var _ Subject = (*fieldData)(nil)
 
 type fieldData struct {
-	zero   bool
-	val    any
 	path   string
 	inMask bool
 	set    bool
+	value  protoreflect.Value
 }
 
 // HasTrait implements policy.Subject.
-func (f *fieldData) HasTrait(t trait) bool {
-	if t.traitType == notZero && f.z() {
+func (f *fieldData) HasTrait(t Trait) bool {
+	if t.Type() == NotZero && f.z() {
 		return false
 	}
-	if t.traitType == calculated {
-		return t.calculate(f.v())
+	if t.Type() == NotEqual {
+		return f.v() != t.NotEqVal()
 	}
 	return true
 }
@@ -70,30 +80,24 @@ func (f *fieldData) ConditionalAction(conditions Condition) Action {
 	return Check
 }
 
-func newFieldData(value any, valid, inMask bool, name, parent string) *fieldData {
-	if parent != "" {
-		name = fmt.Sprintf("%s.%s", parent, name)
-	}
+func newFieldData(fv protoreflect.Value, inMask bool, path string) *fieldData {
 	return &fieldData{
-		zero:   !valid || reflect.ValueOf(value).IsZero(),
-		val:    value,
-		path:   name,
+		value:  fv,
+		path:   path,
 		inMask: inMask,
 		set:    true,
 	}
 }
 
-func newUnsetFieldData(name string, inMask bool) *fieldData {
+func newUnsetFieldData(inMask bool, path string) *fieldData {
 	return &fieldData{
-		zero:   true,
-		val:    nil,
-		path:   name,
+		path:   path,
 		inMask: inMask,
 	}
 }
 
 func (f fieldData) z() bool {
-	return f.zero
+	return !f.value.IsValid() || reflect.ValueOf(f.value.Interface()).IsZero()
 }
 
 func (f fieldData) m() bool {
@@ -101,7 +105,11 @@ func (f fieldData) m() bool {
 }
 
 func (f fieldData) v() any {
-	return f.val
+	return f.value.Interface()
+}
+
+func (f fieldData) fv() protoreflect.Value {
+	return f.value
 }
 
 func (f fieldData) p() string {
@@ -115,41 +123,71 @@ func (f fieldData) s() bool {
 // fill fills the store with field data from the request message. It keeps track
 // of the mask paths requested (if present), and creates unset fields for anything
 // specified in the mask but not set on the message.
-func (store fieldStore) fill(message proto.Message, paths ...string) {
-	pathSet := newPathSet(paths...)
-	fillStore(message, pathSet, store, true, "")
-	// if we have unclaimed paths, create unset fields from them
-	for _, uc := range pathSet.unclaimed() {
-		store.add(newUnsetFieldData(uc, true))
+func (store *fieldStore[T]) populate(policyFields []string, paths ...string) {
+	pathLookup := make(map[string]struct{})
+	for _, p := range paths {
+		pathLookup[p] = struct{}{}
+	}
+	for _, f := range policyFields {
+		_, im := pathLookup[f]
+		store.populateRecursive(store.msg, store.msg.ProtoReflect().Descriptor(), im, f, "")
 	}
 }
 
 // fillStore recursively ranges over the fields in the message.
-func fillStore(message proto.Message, paths pathSet, store fieldStore, init bool, parent string) {
-	if message == nil || store.empty() && !init {
+func (store *fieldStore[T]) populateRecursive(message proto.Message, desc protoreflect.MessageDescriptor, inMask bool, field, traversed string) {
+	if message == nil || desc == nil || field == "" || field == "." {
 		return
 	}
-	message.ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
-		fieldValue := message.ProtoReflect().Get(fd)
-		var match string
-		if !paths.empty() {
-			if paths.has(string(fd.Name())) {
-				match = string(fd.Name())
-			} else if fd.HasJSONName() && paths.has(fd.JSONName()) {
-				match = fd.JSONName()
-			}
-			// if it's in the mask, claim it
-			if match != "" {
-				paths.claim(match)
-			}
+	spl := strings.Split(field, ".")
+	topLevelParent := spl[0]
+	var (
+		fieldValue protoreflect.Value
+		set        bool
+	)
+	existing := store.getByPath(topLevelParent)
+	if existing != nil {
+		if len(spl) == 1 {
+			return
 		}
-		fieldData := newFieldData(fieldValue.Interface(), fieldValue.IsValid(), match != "", string(fd.Name()), parent)
-		store.add(fieldData)
-		if fd.Message() == nil {
-			return true
+		fieldValue = existing.fv()
+		set = existing.s()
+	} else {
+		f := desc.Fields().ByName(protoreflect.Name(topLevelParent))
+		if f == nil {
+			f = desc.Fields().ByJSONName(topLevelParent)
 		}
-		fillStore(fieldValue.Message().Interface(), paths, store, false, fieldData.p())
-		return true
-	})
-	return
+		if f == nil {
+			for i := range spl {
+				store.add(newUnsetFieldData(inMask, getPath(traversed, strings.Join(spl[0:i+1], "."))))
+			}
+			return
+		}
+		set = message.ProtoReflect().Has(f)
+		fieldValue = message.ProtoReflect().Get(f)
+	}
+	if len(spl) == 1 {
+		if !set {
+			store.add(newUnsetFieldData(inMask, getPath(traversed, topLevelParent)))
+			return
+		}
+		store.add(newFieldData(fieldValue, inMask, getPath(traversed, topLevelParent)))
+		return
+	}
+	if fieldValue.Message() == nil {
+		return
+	}
+	store.populateRecursive(
+		fieldValue.Message().Interface(),
+		fieldValue.Message().Descriptor(),
+		inMask,
+		strings.Join(spl[1:], "."),
+		getPath(traversed, topLevelParent))
+}
+
+func getPath(traversed, name string) string {
+	if traversed == "" {
+		return name
+	}
+	return fmt.Sprintf("%s.%s", traversed, name)
 }

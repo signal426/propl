@@ -11,75 +11,21 @@ import (
 type Precheck[T proto.Message] func(ctx context.Context, msg T) error
 
 type Subject interface {
-	HasTrait(t trait) bool
+	HasTrait(t Trait) bool
 	ConditionalAction(condition Condition) Action
+}
+
+type Trait interface {
+	And() Trait
+	Or() Trait
+	InfractionsString() string
+	Type() TraitType
+	Valid() bool
 }
 
 type Policy struct {
 	conditions Condition
-	traits     *trait
-}
-
-// NeverZero triggers a violation if
-// the field is zero.
-func NeverZero() *Policy {
-	return &Policy{
-		traits:     notZeroTrait(),
-		conditions: InMessage.And(InMask),
-	}
-}
-
-// NeverZeroWhen triggers a violation if
-// the field has the specified condition(s)
-func NeverZeroWhen(c Condition) *Policy {
-	return &Policy{
-		traits:     notZeroTrait(),
-		conditions: c,
-	}
-}
-
-// And chains a policy to another policy.
-// If one policy fails, the chain fails.
-func (p *Policy) And(and *Policy) *Policy {
-	p.traits.and(and.traits)
-	p.conditions.And(and.conditions)
-	return p
-}
-
-func (p *Policy) Or(or *Policy) *Policy {
-	p.traits.or(or.traits)
-	p.conditions.Or(or.conditions)
-	return p
-}
-
-// Calculated runs the specified function if field is set.
-//
-// A Calculated Policy is a composition of a calculation function and an assertion message.
-// The function receives the interface value of the proto field and returns wether or not
-// the assertion is true.
-func Calculated(assertion string, calc func(any) bool) *Policy {
-	return &Policy{
-		traits: calculatedTrait(traitCalculation{
-			assertion:   assertion,
-			calculation: calc,
-		}),
-		conditions: InMessage.And(InMask),
-	}
-}
-
-// CalculatedWhen runs the specified function when the conditions apply.
-//
-// A Calculated Policy is a composition of a calculation function and an assertion message.
-// The function receives the interface value of the proto field and returns wether or not
-// the assertion is true.
-func CalculatedWhen(assertion string, calc func(any) bool, c Condition) *Policy {
-	return &Policy{
-		traits: calculatedTrait(traitCalculation{
-			assertion:   assertion,
-			calculation: calc,
-		}),
-		conditions: c,
-	}
+	traits     Trait
 }
 
 // Execute checks traits on the field based on the conditional action signal
@@ -95,22 +41,22 @@ func (p *Policy) Execute(s Subject) error {
 	}
 }
 
-func (p *Policy) checkTraits(s Subject, trait *trait) error {
-	if trait == nil {
+func (p *Policy) checkTraits(s Subject, t Trait) error {
+	if t == nil {
 		return nil
 	}
-	if !s.HasTrait(*trait) {
+	if t.Valid() && !s.HasTrait(t) {
 		// if we have an or, keep going
-		if trait.orTrait != nil {
-			return p.checkTraits(s, trait.orTrait)
+		if t.Or().Valid() {
+			return p.checkTraits(s, t.Or())
 		}
 		// else, we're done checking
-		return errors.New(trait.infractionString())
+		return errors.New(t.InfractionsString())
 	}
 	// if there's an and condition, keep going
 	// else, we're done
-	if trait.andTrait != nil {
-		return p.checkTraits(s, trait.andTrait)
+	if t.And().Valid() {
+		return p.checkTraits(s, t.And())
 	}
 	return nil
 }

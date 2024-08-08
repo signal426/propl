@@ -5,59 +5,70 @@ import (
 
 	proplv1 "buf.build/gen/go/signal426/propl/protocolbuffers/go/propl/v1"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 func TestCreateFieldStoreFromMessage(t *testing.T) {
-	t.Run("it should create a field store from a proto message", func(t *testing.T) {
+	t.Run("it should hydrate a field store", func(t *testing.T) {
 		// arrange
-		expected := fieldStore{
-			"user.id": {
-				zero: false,
-				path: "user.id",
-				val:  "abc123",
-				set:  true,
-			},
-			"user.first_name": {
-				zero:   true,
-				path:   "first_name",
-				val:    nil,
-				inMask: true,
-			},
-			"update_mask": {
-				zero: false,
-				path: "update_mask",
-				val: &fieldmaskpb.FieldMask{
-					Paths: []string{"first_name"},
-				},
-				set: true,
-			},
-			"update_mask.paths": {
-				zero: false,
-				path: "update_mask.paths",
-				val:  []string{"first_name"},
-				set:  true,
-			},
-		}
-		input := &proplv1.UpdateUserRequest{
+		msg := &proplv1.CreateUserRequest{
 			User: &proplv1.User{
-				Id: "abc123",
-			},
-			UpdateMask: &fieldmaskpb.FieldMask{
-				Paths: []string{"first_name"},
+				FirstName: "bob",
+				LastName:  "loblaw",
 			},
 		}
 		// act
-		store := newFieldStore()
-		store.fill(input, "first_name")
+		s := newFieldStore[*proplv1.CreateUserRequest](msg)
+		s.populate([]string{"user.first_name", "user.id", "user.last_name"})
 		// assert
-		assert.Equal(t, 5, len(store))
-		for _, e := range expected {
-			a := store.getByPath(e.p())
-			assert.Equal(t, e.p(), a.p())
-			assert.Equal(t, e.z(), a.z())
-			assert.Equal(t, e.s(), a.s())
-			assert.Equal(t, e.m(), a.m())
+		id := s.getByPath("user.id")
+		fn := s.getByPath("user.first_name")
+		ln := s.getByPath("user.last_name")
+		assert.False(t, id.s(), "id should not be set")
+		assert.True(t, id.z(), "id should be zero")
+		assert.True(t, fn.s(), "first name should be set")
+		assert.Equal(t, fn.v(), "bob", "first name should be bob")
+		assert.True(t, ln.s(), "last name should be set")
+		assert.Equal(t, ln.v(), "loblaw", "last name should be equal")
+	})
+
+	t.Run("it should hydrate a complex field store", func(t *testing.T) {
+		// arrange
+		msg := &proplv1.CreateUserRequest{
+			User: &proplv1.User{
+				Id:        "abc123",
+				FirstName: "bob",
+				LastName:  "loblaw",
+				PrimaryAddress: &proplv1.Address{
+					Line1: "321",
+					Line2: "dddd",
+				},
+				SecondaryAddresses: []*proplv1.Address{
+					{
+						Line1: "rrrr",
+						Line2: "fvvvv",
+					},
+				},
+			},
 		}
+		// act
+		s := newFieldStore[*proplv1.CreateUserRequest](msg)
+		s.populate([]string{"user.first_name", "user.id", "user.last_name", "user.primary_address", "user.primary_address.line1", "user.primary_address.line2"})
+		// spew.Dump(s)
+		// assert
+		id := s.getByPath("user.id")
+		fn := s.getByPath("user.first_name")
+		ln := s.getByPath("user.last_name")
+		pa := s.getByPath("user.primary_address")
+		pal1 := s.getByPath("user.primary_address.line1")
+		pal2 := s.getByPath("user.primary_address.line2")
+		assert.True(t, id.s(), "id should be set")
+		assert.Equal(t, id.v(), "abc123", "id should be abc123")
+		assert.True(t, fn.s(), "first name should be set")
+		assert.Equal(t, fn.v(), "bob", "first name should be bob")
+		assert.True(t, ln.s(), "last name should be set")
+		assert.Equal(t, ln.v(), "loblaw", "last name should be equal")
+		assert.NotNil(t, pa.v(), "primary address should not be nil")
+		assert.Equal(t, pal1.v(), "321", "primary address line 1 should be 321")
+		assert.Equal(t, pal2.v(), "dddd", "primary address line 2 should be dddd")
 	})
 }

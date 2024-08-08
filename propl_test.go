@@ -4,17 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"testing"
 
 	proplv1 "buf.build/gen/go/signal426/propl/protocolbuffers/go/propl/v1"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
-
-func firstNameNotBob(v any) bool {
-	return strings.ToLower(v.(string)) != "bob"
-}
 
 func TestFieldPolicies(t *testing.T) {
 	t.Run("it should validate non-zero", func(t *testing.T) {
@@ -24,30 +19,28 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := For(req).
-			WithFieldPolicy("user.id", NeverZero())
+		p := For(req).NeverZero("user.id")
 		// act
 		err := p.E(context.Background())
 		// assert
 		assert.Error(t, err)
 	})
 
-	t.Run("it should validate custom", func(t *testing.T) {
+	t.Run("it should validate not eq", func(t *testing.T) {
 		// arrange
 		req := &proplv1.CreateUserRequest{
 			User: &proplv1.User{
 				FirstName: "Bob",
 			},
 		}
-		p := For(req).
-			WithFieldPolicy("user.first_name", Calculated("be equal to bob", firstNameNotBob))
+		p := For(req).NeverEq("user.first_name", "Bob")
 		// act
 		err := p.E(context.Background())
 		// assert
 		assert.Error(t, err)
 	})
 
-	t.Run("it should validate nested", func(t *testing.T) {
+	t.Run("it should validate complex", func(t *testing.T) {
 		// arrange
 		req := &proplv1.UpdateUserRequest{
 			User: &proplv1.User{
@@ -62,13 +55,12 @@ func TestFieldPolicies(t *testing.T) {
 			},
 		}
 		p := For(req, req.GetUpdateMask().GetPaths()...).
-			WithFieldPolicy("user.id", NeverZero()).
-			WithFieldPolicy("some.fake", NeverZero()).
-			WithFieldPolicy("user.first_name", NeverZeroWhen(InMask).
-				And(Calculated("it should not be equal to bob", firstNameNotBob))).
-			WithFieldPolicy("user.last_name", NeverZeroWhen(InMask)).
-			WithFieldPolicy("user.primary_address", NeverZeroWhen(InMask)).
-			WithFieldPolicy("user.primary_address.line1", NeverZeroWhen(InMask))
+			NeverZero("user.id").
+			NeverZero("some.fake").
+			NeverZeroWhen("user.first_name", InMask).
+			NeverZeroWhen("user.last_name", InMask).
+			NeverZeroWhen("user.primary_address", InMask).
+			NeverZeroWhen("user.primary_address.line1", InMask)
 		// act
 		err := p.E(context.Background())
 		// assert
@@ -98,13 +90,12 @@ func TestFieldPolicies(t *testing.T) {
 		}
 		p := For(req, req.GetUpdateMask().GetPaths()...).
 			WithFieldInfractionsHandler(finfractionsHandler).
-			WithFieldPolicy("user.id", NeverZero()).
-			WithFieldPolicy("some.fake", NeverZero()).
-			WithFieldPolicy("user.first_name", NeverZeroWhen(InMask).
-				And(Calculated("it should not be equal to bob", firstNameNotBob))).
-			WithFieldPolicy("user.last_name", NeverZeroWhen(InMask)).
-			WithFieldPolicy("user.primary_address", NeverZeroWhen(InMask)).
-			WithFieldPolicy("user.primary_address.line1", NeverZeroWhen(InMask))
+			NeverZero("user.id").
+			NeverZero("some.fake").
+			NeverZeroWhen("user.first_name", InMask).
+			NeverZeroWhen("user.last_name", InMask).
+			NeverZeroWhen("user.primary_address", InMask).
+			NeverZeroWhen("user.primary_address.line1", InMask)
 		// act
 		err := p.E(context.Background())
 		// assert
@@ -133,13 +124,12 @@ func TestFieldPolicies(t *testing.T) {
 		}
 		p := For(req, req.GetUpdateMask().GetPaths()...).
 			WithPrecheckPolicy(authorizeUpdate).
-			WithFieldPolicy("user.id", NeverZero()).
-			WithFieldPolicy("some.fake", NeverZero()).
-			WithFieldPolicy("user.first_name", NeverZeroWhen(InMask).
-				And(Calculated("it should not be equal to bob", firstNameNotBob))).
-			WithFieldPolicy("user.last_name", NeverZeroWhen(InMask)).
-			WithFieldPolicy("user.primary_address", NeverZeroWhen(InMask)).
-			WithFieldPolicy("user.primary_address.line1", NeverZeroWhen(InMask))
+			NeverZero("user.id").
+			NeverZero("some.fake").
+			NeverZeroWhen("user.first_name", InMask).
+			NeverZeroWhen("user.last_name", InMask).
+			NeverZeroWhen("user.primary_address", InMask).
+			NeverZeroWhen("user.primary_address.line1", InMask)
 		// act
 		err := p.E(context.Background())
 		// assert

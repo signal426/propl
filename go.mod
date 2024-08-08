@@ -5,6 +5,7 @@ go 1.21.4
 require (
 	buf.build/gen/go/signal426/propl/protocolbuffers/go v1.34.2-20240630002250-22a8126fe397.2
 	github.com/stretchr/testify v1.9.0
+	golang.org/x/exp v0.0.0-20240707233637-46b078467d37
 	google.golang.org/protobuf v1.34.2
 )
 

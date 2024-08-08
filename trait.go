@@ -1,57 +1,56 @@
 package propl
 
-import "fmt"
-
-type traitType uint32
-
-const (
-	notZero traitType = iota
-	calculated
+import (
+	"fmt"
 )
 
-func (t *trait) and(and *trait) *trait {
+type TraitType uint32
+
+const (
+	NotZero TraitType = iota
+	NotEqual
+)
+
+var _ Trait = (*fieldTrait)(nil)
+
+// fieldTrait
+type fieldTrait struct {
+	fieldTraitType TraitType
+	notEq          any
+	andTrait       *fieldTrait
+	orTrait        *fieldTrait
+}
+
+func (t *fieldTrait) and(and *fieldTrait) *fieldTrait {
 	t.andTrait = and
 	return t
 }
 
-func (t *trait) or(or *trait) *trait {
+func (t fieldTrait) NotEqVal() any {
+	return t.notEq
+}
+
+func (t *fieldTrait) And() Trait {
+	return t.andTrait
+}
+
+func (t fieldTrait) Type() TraitType {
+	return t.fieldTraitType
+}
+
+func (t *fieldTrait) Or() Trait {
+	return t.orTrait
+}
+
+func (t *fieldTrait) Valid() bool {
+	return t != nil
+}
+
+func (t *fieldTrait) or(or *fieldTrait) *fieldTrait {
 	t.orTrait = or
 	return t
 }
 
-type traitCalculation struct {
-	calculation func(any) bool
-	assertion   string
-}
-
-// trait
-type trait struct {
-	traitType   traitType
-	andTrait    *trait
-	orTrait     *trait
-	calculation traitCalculation
-}
-
-func (t trait) calculate(v any) bool {
-	return t.calculation.calculation(v)
-}
-
-func (t trait) infractionString() string {
-	if t.traitType == calculated {
-		return fmt.Sprintf("%s", t.calculation.assertion)
-	}
+func (t *fieldTrait) InfractionsString() string {
 	return fmt.Sprintf("it should not be zero")
-}
-
-func notZeroTrait() *trait {
-	return &trait{
-		traitType: notZero,
-	}
-}
-
-func calculatedTrait(tc traitCalculation) *trait {
-	return &trait{
-		traitType:   calculated,
-		calculation: tc,
-	}
 }

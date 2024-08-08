@@ -3,26 +3,14 @@ package propl
 import (
 	"context"
 
+	"golang.org/x/exp/maps"
 	"google.golang.org/protobuf/proto"
 )
 
-// fieldPolicy ties field data to a policy
-type fieldPolicy struct {
-	id     string
-	field  *fieldData
-	policy *Policy
-}
-
-func (r *fieldPolicy) check() error {
-	return r.policy.Execute(r.field)
-}
-
 // Propl is an aggregation of policies on some proto message.
 type Propl[T proto.Message] struct {
-	requestMessage          T
-	fieldPolicies           []*fieldPolicy
-	fieldStore              fieldStore
-	fptr                    map[string]int
+	policies                map[string]*Policy
+	fieldStore              *fieldStore[T]
 	fieldInfractionsHandler FieldInfractionsHandler
 	precheck                Precheck[T]
 }
@@ -30,13 +18,9 @@ type Propl[T proto.Message] struct {
 // For creates a new policy aggregate for the specified message that can be built upon using the
 // builder methods.
 func For[T proto.Message](msg T, paths ...string) *Propl[T] {
-	fieldStore := newFieldStore()
-	fieldStore.fill(msg, paths...)
 	r := &Propl[T]{
-		requestMessage: msg,
-		fieldPolicies:  []*fieldPolicy{},
-		fieldStore:     fieldStore,
-		fptr:           make(map[string]int),
+		fieldStore: newFieldStore(msg),
+		policies:   make(map[string]*Policy),
 	}
 	return r
 }
@@ -54,28 +38,60 @@ func (r *Propl[T]) WithPrecheckPolicy(p Precheck[T]) *Propl[T] {
 	return r
 }
 
+func (r *Propl[T]) FieldPolicy(path string, traits Trait, conditions Condition) *Propl[T] {
+	r.policies[path] = &Policy{
+		conditions: conditions,
+		traits:     traits,
+	}
+	return r
+}
+
 // WithFieldPolicy adds a field policy for the request. Accepts a "." delimited location to the
 // field to which the policy applies.
 // Duplicate path entries results in the last policy set to be the one applied.
-func (r *Propl[T]) WithFieldPolicy(path string, policy *Policy) *Propl[T] {
-	fieldData := r.fieldStore.getByPath(path)
-	if fieldData == nil {
-		// if our field wasn't populated in our message, add an unset field to our store
-		fieldData = newUnsetFieldData(path, false)
-		r.fieldStore.add(fieldData)
+func (r *Propl[T]) NeverZero(path string) *Propl[T] {
+	fp := &Policy{
+		conditions: InMask.And(InMessage),
+		traits: &fieldTrait{
+			fieldTraitType: NotZero,
+		},
 	}
-	fieldPolicy := &fieldPolicy{
-		policy: policy,
-		field:  fieldData,
-		id:     path,
+	r.policies[path] = fp
+	return r
+}
+
+func (r *Propl[T]) NeverZeroWhen(path string, conditions Condition) *Propl[T] {
+	fp := &Policy{
+		conditions: conditions,
+		traits: &fieldTrait{
+			fieldTraitType: NotZero,
+		},
 	}
-	// overwrite if we already have a field policy for this path
-	if idx, ok := r.fptr[fieldPolicy.id]; ok {
-		r.fieldPolicies[idx] = fieldPolicy
-	} else {
-		r.fieldPolicies = append(r.fieldPolicies, fieldPolicy)
-		r.fptr[fieldPolicy.id] = len(r.fieldPolicies) - 1
+	r.policies[path] = fp
+	return r
+}
+
+func (r *Propl[T]) NeverEq(path string, v any) *Propl[T] {
+	fp := &Policy{
+		conditions: InMask.And(InMessage),
+		traits: &fieldTrait{
+			fieldTraitType: NotEqual,
+			notEq:          v,
+		},
 	}
+	r.policies[path] = fp
+	return r
+}
+
+func (r *Propl[T]) NeverEqWhen(path string, conditions Condition, v any) *Propl[T] {
+	fp := &Policy{
+		conditions: conditions,
+		traits: &fieldTrait{
+			fieldTraitType: NotEqual,
+			notEq:          v,
+		},
+	}
+	r.policies[path] = fp
 	return r
 }
 
@@ -91,16 +107,19 @@ func (r *Propl[T]) E(ctx context.Context) error {
 // To use your own infractionsHandler, specify a handler using WithInfractionsHandler.
 func (r *Propl[T]) Evaluate(ctx context.Context) error {
 	if r.precheck != nil {
-		if err := r.precheck(ctx, r.requestMessage); err != nil {
+		if err := r.precheck(ctx, r.fieldStore.message()); err != nil {
 			return err
 		}
 	}
+	// populate the store based on the validation fields
+	// and the message
+	r.fieldStore.populate(maps.Keys(r.policies))
 	// ensure some handler is set
 	r.ensureFieldInfractionsHandler()
 	finfractions := make(map[string]error)
-	for _, fp := range r.fieldPolicies {
-		if err := fp.check(); err != nil {
-			finfractions[fp.id] = err
+	for id, p := range r.policies {
+		if err := p.Execute(r.fieldStore.getByPath(id)); err != nil {
+			finfractions[id] = err
 		}
 	}
 	if len(finfractions) > 0 {
