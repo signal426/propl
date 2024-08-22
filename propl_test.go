@@ -11,6 +11,16 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
+type MyErrResultHandler struct{}
+
+func (my MyErrResultHandler) Process(m map[string]error) error {
+	var errString string
+	for k, v := range m {
+		errString += fmt.Sprintf("%s: %s\n", k, v.Error())
+	}
+	return errors.New(errString)
+}
+
 func TestFieldPolicies(t *testing.T) {
 	t.Run("it should validate non-zero", func(t *testing.T) {
 		// arrange
@@ -19,7 +29,7 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := For(req).NeverZero("user.id")
+		p := Subject(req).NeverZero("user.id")
 		// act
 		err := p.E(context.Background())
 		// assert
@@ -33,7 +43,7 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := For(req).CustomEval("user.first_name", func(t *proplv1.CreateUserRequest) error {
+		p := Subject(req).NeverErr("user.first_name", func(t *proplv1.CreateUserRequest) error {
 			if t.GetUser().GetFirstName() == "Bob" {
 				return errors.New("cant be bob")
 			}
@@ -59,13 +69,12 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name"},
 			},
 		}
-		p := For(req, req.GetUpdateMask().GetPaths()...).
-			NeverZero("user.id").
-			NeverZero("some.fake").
-			NeverZeroWhen("user.first_name", InMask).
-			NeverZeroWhen("user.last_name", InMask).
-			NeverZeroWhen("user.primary_address", InMask).
-			NeverZeroWhen("user.primary_address.line1", InMask)
+		p := Subject(req, req.GetUpdateMask().GetPaths()...).
+			NeverZero("user.id", "some.fake").
+			NeverZeroWhen(
+				IsInMask("user.last_name"),
+				IsInMask("user.primary_address"),
+				IsInMask("user.primary_address.line1"))
 		// act
 		err := p.E(context.Background())
 		// assert
@@ -74,13 +83,6 @@ func TestFieldPolicies(t *testing.T) {
 
 	t.Run("it should validate with custom field infractions handler", func(t *testing.T) {
 		// arrange
-		finfractionsHandler := func(i map[string]error) error {
-			var errString string
-			for k, v := range i {
-				errString += fmt.Sprintf("%s: %s\n", k, v.Error())
-			}
-			return errors.New(errString)
-		}
 		req := &proplv1.UpdateUserRequest{
 			User: &proplv1.User{
 				FirstName: "bob",
@@ -93,21 +95,20 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name", "line1"},
 			},
 		}
-		p := For(req, req.GetUpdateMask().GetPaths()...).
-			WithFieldInfractionsHandler(finfractionsHandler).
-			NeverZero("user.id").
-			NeverZero("some.fake").
-			NeverZeroWhen("user.first_name", InMask).
-			NeverZeroWhen("user.last_name", InMask).
-			NeverZeroWhen("user.primary_address", InMask).
-			CustomEvalWhen("user.primary_address.line1", InMask, func(t *proplv1.UpdateUserRequest) error {
-				if t.GetUser().GetPrimaryAddress().GetLine1() == "a" {
+		p := Subject(req, req.GetUpdateMask().GetPaths()...).
+			NeverZero("user.id", "some.fake").
+			NeverZeroWhen(
+				IsInMask("user.first_name"),
+				IsInMask("user.last_name"),
+				IsInMask("user.primary_address")).
+			NeverErrWhen(IsInMask("user.primary_address.line1"), func(msg *proplv1.UpdateUserRequest) error {
+				if msg.GetUser().GetPrimaryAddress().GetLine1() == "a" {
 					return errors.New("cannot be a")
 				}
 				return nil
 			})
 		// act
-		err := p.E(context.Background())
+		err := p.CustomErrResultHandler(MyErrResultHandler{}).E(context.Background())
 		// assert
 		assert.Error(t, err)
 	})
@@ -132,8 +133,7 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name"},
 			},
 		}
-		p := For(req, req.GetUpdateMask().GetPaths()...).
-			WithPrecheckPolicy(authorizeUpdate).
+		p := For(Ctx{}).
 			NeverZero("user.id").
 			NeverZero("some.fake").
 			NeverZeroWhen("user.first_name", InMask).

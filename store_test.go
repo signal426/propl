@@ -18,13 +18,13 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 		}
 		// act
 		s := newFieldStore[*proplv1.CreateUserRequest](msg)
-		s.loadFieldsFromPath("user.first_name").
-			loadFieldsFromPath("user.id").
-			loadFieldsFromPath("user.last_name")
+		s.processPath("user.first_name").
+			processPath("user.id").
+			processPath("user.last_name")
 		// assert
-		id := s.getByPath("user.id")
-		fn := s.getByPath("user.first_name")
-		ln := s.getByPath("user.last_name")
+		id := s.dataAtPath("user.id")
+		fn := s.dataAtPath("user.first_name")
+		ln := s.dataAtPath("user.last_name")
 		assert.False(t, id.s(), "id should not be set")
 		assert.True(t, id.z(), "id should be zero")
 		assert.True(t, fn.s(), "first name should be set")
@@ -54,20 +54,19 @@ func TestCreateFieldStoreFromMessage(t *testing.T) {
 		}
 		// act
 		s := newFieldStore[*proplv1.CreateUserRequest](msg)
-		s.loadFieldsFromPath("user.id").
-			loadFieldsFromPath("user.first_name").
-			loadFieldsFromPath("user.last_name").
-			loadFieldsFromPath("user.primary_address").
-			loadFieldsFromPath("user.primary_address.line1").
-			loadFieldsFromPath("user.primary_address.line2")
-		// spew.Dump(s)
+		s.processPath("user.id").
+			processPath("user.first_name").
+			processPath("user.last_name").
+			processPath("user.primary_address").
+			processPath("user.primary_address.line1").
+			processPath("user.primary_address.line2")
 		// assert
-		id := s.getByPath("user.id")
-		fn := s.getByPath("user.first_name")
-		ln := s.getByPath("user.last_name")
-		pa := s.getByPath("user.primary_address")
-		pal1 := s.getByPath("user.primary_address.line1")
-		pal2 := s.getByPath("user.primary_address.line2")
+		id := s.dataAtPath("user.id")
+		fn := s.dataAtPath("user.first_name")
+		ln := s.dataAtPath("user.last_name")
+		pa := s.dataAtPath("user.primary_address")
+		pal1 := s.dataAtPath("user.primary_address.line1")
+		pal2 := s.dataAtPath("user.primary_address.line2")
 		assert.True(t, id.s(), "id should be set")
 		assert.Equal(t, id.v(), "abc123", "id should be abc123")
 		assert.True(t, fn.s(), "first name should be set")

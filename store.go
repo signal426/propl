@@ -52,7 +52,7 @@ func (f *fieldStore[T]) add(fd *fieldData) {
 	f.store[fd.p()] = fd
 }
 
-func (f fieldStore[T]) getByPath(p string) *fieldData {
+func (f fieldStore[T]) dataAtPath(p string) *fieldData {
 	fd, ok := f.store[p]
 	if !ok {
 		// we may have a field that was in a mask, but not set in the message.
@@ -65,7 +65,7 @@ func (f fieldStore[T]) getByPath(p string) *fieldData {
 	return fd
 }
 
-var _ Subject = (*fieldData)(nil)
+var _ PolicySubject = (*fieldData)(nil)
 
 type fieldData struct {
 	path   string
@@ -133,14 +133,15 @@ func (f fieldData) s() bool {
 	return f.set
 }
 
-// loadFieldsFromPath loads the data store with field data for each field
-// in the path
-func (store *fieldStore[T]) loadFieldsFromPath(field string) *fieldStore[T] {
-	store.loadFieldsFromPathRecursive(store.msg, store.msg.ProtoReflect().Descriptor(), store.isFieldInMask(field), field, "")
+// processPath processes the field path elements
+//
+// returns the field data from the field at the provided path location.
+func (store *fieldStore[T]) processPath(field string) *fieldStore[T] {
+	store.processPathRecursive(store.msg, store.msg.ProtoReflect().Descriptor(), store.isFieldInMask(field), field, "")
 	return store
 }
 
-func (store *fieldStore[T]) loadFieldsFromPathRecursive(message proto.Message, desc protoreflect.MessageDescriptor, inMask bool, field, traversed string) {
+func (store *fieldStore[T]) processPathRecursive(message proto.Message, desc protoreflect.MessageDescriptor, inMask bool, field, traversed string) {
 	if message == nil || desc == nil || field == "" || field == "." {
 		return
 	}
@@ -150,7 +151,7 @@ func (store *fieldStore[T]) loadFieldsFromPathRecursive(message proto.Message, d
 		fieldValue protoreflect.Value
 		set        bool
 	)
-	existing := store.getByPath(topLevelParent)
+	existing := store.dataAtPath(topLevelParent)
 	if existing != nil {
 		if len(spl) == 1 {
 			return
@@ -182,7 +183,7 @@ func (store *fieldStore[T]) loadFieldsFromPathRecursive(message proto.Message, d
 	if fieldValue.Message() == nil {
 		return
 	}
-	store.loadFieldsFromPathRecursive(
+	store.processPathRecursive(
 		fieldValue.Message().Interface(),
 		fieldValue.Message().Descriptor(),
 		inMask,

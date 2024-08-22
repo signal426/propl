@@ -7,10 +7,20 @@ import (
 	"strings"
 )
 
-type FieldInfractionsHandler func(errs map[string]error) error
+type ErrResultHandler interface {
+	Process(errs map[string]error) error
+}
 
-// defaultFieldInfractionsHandler if no FieldInfractionsHandler specified
-func defaultFieldInfractionsHandler(errs map[string]error) error {
+var _ ErrResultHandler = (*defaultErrResultHandler)(nil)
+
+type defaultErrResultHandler struct{}
+
+func newDefaultErrResultHandler() *defaultErrResultHandler {
+	return &defaultErrResultHandler{}
+}
+
+// Process implements ErrResultHandler.
+func (*defaultErrResultHandler) Process(errs map[string]error) error {
 	var buffer bytes.Buffer
 	buffer.WriteString("field infractions: [\n")
 	for k, v := range errs {

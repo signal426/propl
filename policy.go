@@ -8,9 +8,11 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type Precheck[T proto.Message] func(ctx context.Context, msg T) error
+type BeforeFields[T proto.Message] func(ctx context.Context, msg T) error
 
-type Subject interface {
+type TriggeredEvaluation[T proto.Message] func(msg T) error
+
+type PolicySubject interface {
 	HasTrait(t Trait) bool
 	ConditionalAction(condition Condition) Action
 }
@@ -29,7 +31,7 @@ type Policy interface {
 }
 
 type policy struct {
-	subject    Subject
+	subject    PolicySubject
 	conditions Condition
 	traits     Trait
 }
@@ -73,9 +75,9 @@ func (p *policy) checkTraits(t Trait) error {
 
 type customPolicy[T proto.Message] struct {
 	arg        T
-	subject    Subject
+	subject    PolicySubject
 	conditions Condition
-	f          func(t T) error
+	eval       TriggeredEvaluation[T]
 }
 
 func (mp *customPolicy[T]) Execute() error {
@@ -90,5 +92,5 @@ func (mp *customPolicy[T]) Execute() error {
 }
 
 func (mp *customPolicy[T]) EvaluateSubjectTraits() error {
-	return mp.f(mp.arg)
+	return mp.eval(mp.arg)
 }
