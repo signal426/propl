@@ -6,33 +6,29 @@ not slow, it achieves a nice API through reflection and recursion, so not the sa
 ###  Usage
 Example:
 ```go
-// can specify a precheck function (e.g. an authz check) that will skip the rest of the evaluations if fails
-authorizeUpdate := func(_ context.Context, msg *proplv1.UpdateUserRequest) error {
-	if msg.GetUser().GetId() != "abc123" {
-		return errors.New("can only update user abc123")
-	}
-	return nil
-}
-req := &proplv1.UpdateUserRequest{
-	User: &proplv1.User{
-		FirstName: "bob",
-		PrimaryAddress: &proplv1.Address{
-			Line1: "a",
-			Line2: "b",
-		},
-	},
-	UpdateMask: &fieldmaskpb.FieldMask{
-		Paths: []string{"first_name", "last_name"},
-	},
-}
-p := For(req, req.GetUpdateMask().GetPaths()...).
-	WithPrecheckPolicy(authorizeUpdate).
-	NeverZero("user.id").
-	NeverZero("some.fake").
-	NeverZeroWhen("user.first_name", InMask).
-	NeverZeroWhen("user.last_name", InMask).
-	NeverZeroWhen("user.primary_address", InMask).
-	NeverZeroWhen("user.primary_address.line1", InMask)
-err := p.E(context.Background())
+// ForSubject(request, options...) instantiates the evaluator
+p := ForSubject(req, WithCtx(context.Background()), WithMaskPaths(req.GetUpdateMask().GetPaths()...)).
+	// Specify all of the field paths that should not be equal to their zero value
+	HasNonZeroFields("user.id", "some.fake").
+	// Specify all of the field paths that must not be zero if they meet the specified conditions (e.g. a field is supplied in a mask)
+	HasNonZeroFieldsWhen(
+		IsInMask("user.first_name"),
+		IsInMask("user.last_name"),
+		IsInMask("user.primary_address")).
+	// specify any custom evaluations that are triggered by the specified field being in chosen conditions
+	HasCustomEvaluationWhen(IsInMask("user.primary_address.line1"), func(ctx context.Context, msg proto.Message) error {
+		// you don't need to do this -- use type assertions. I do this for the error message
+		req, err := AssertType[*proplv1.UpdateUserRequest](msg)
+		if err != nil {
+			return err
+		}
+		if req.GetUser().GetPrimaryAddress().GetLine1() == "a" {
+			return errors.New("cannot be a")
+		}
+		return nil
+	})
+// call this before running the evaluation in order to substitute your own error result handler
+// to do things like custom formatting
+err := p.CustomErrResultHandler(MyErrResultHandler{}).E()
 ```
 Any field on the message not specified in the request policy does not get evaluated.

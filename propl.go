@@ -12,11 +12,15 @@ const (
 	globalKey  = "global"
 )
 
+// Represents a field id and a condition that triggers
+// an evaluation of said field
 type FieldCondition struct {
 	Field     string
 	Condition Condition
 }
 
+// IsInMask constructs a condition that dictates the field
+// is only evaluated if it is speficied in an update mask
 func IsInMask(field string) FieldCondition {
 	return FieldCondition{
 		Field:     field,
@@ -24,6 +28,8 @@ func IsInMask(field string) FieldCondition {
 	}
 }
 
+// Always constructs a condition that dictates the field
+// is always expected to be present for evaluation
 func Always(field string) FieldCondition {
 	return FieldCondition{
 		Field:     field,
@@ -31,7 +37,7 @@ func Always(field string) FieldCondition {
 	}
 }
 
-type EvaluationSubject struct {
+type SubjectUnderEvaluation struct {
 	// context if supplied
 	ctx context.Context
 	// the store for the policy subjects that compose this evaluation
@@ -47,7 +53,7 @@ type EvaluationSubject struct {
 	// policies is the map of field ids to some policy configuration
 	policies map[Policy][]PolicySubject
 	// errResultHandler is the handler that manages the output of the evaluations
-	errResultHandler ErrResultHandler
+	uhoh UhOhHandler
 	// paths is list of fields that are being evaluated if a field mask is supplied
 	paths []string
 	// indicator if the evaluator should exit if any of the pre-functions fail.
@@ -56,12 +62,12 @@ type EvaluationSubject struct {
 }
 
 // Options to provide to the subject evaluation
-type EvaluationOption func(*EvaluationSubject)
+type EvaluationOption func(*SubjectUnderEvaluation)
 
 // Optionally provide a ctx object. This will be passed on
 // any global callback.
 func WithCtx(ctx context.Context) EvaluationOption {
-	return func(s *EvaluationSubject) {
+	return func(s *SubjectUnderEvaluation) {
 		s.ctx = ctx
 	}
 }
@@ -69,7 +75,7 @@ func WithCtx(ctx context.Context) EvaluationOption {
 // Indicator to keep going if a global check fails. Otherwuse
 // will exit the remaining validation after the error. Off by default.
 func WithContinueOnGlobalEvalErr() EvaluationOption {
-	return func(s *EvaluationSubject) {
+	return func(s *SubjectUnderEvaluation) {
 		s.continueOnGlobalEvalErr = true
 	}
 }
@@ -77,7 +83,7 @@ func WithContinueOnGlobalEvalErr() EvaluationOption {
 // Specify global pre-checks. These are executed in the order in which they
 // are specified.
 func WithPrePolicyEvaluation(e TriggeredEvaluation) EvaluationOption {
-	return func(s *EvaluationSubject) {
+	return func(s *SubjectUnderEvaluation) {
 		if s.customEvaluationsPrePol == nil {
 			s.customEvaluationsPrePol = make([]TriggeredEvaluation, 0, 3)
 		}
@@ -88,7 +94,7 @@ func WithPrePolicyEvaluation(e TriggeredEvaluation) EvaluationOption {
 // Specify global pos-checks. These are executed inthe order in which they
 // are specified
 func WithPostPolicyEvaluation(e TriggeredEvaluation) EvaluationOption {
-	return func(s *EvaluationSubject) {
+	return func(s *SubjectUnderEvaluation) {
 		if s.customEvaluationsPostPol == nil {
 			s.customEvaluationsPostPol = make([]TriggeredEvaluation, 0, 3)
 		}
@@ -99,21 +105,21 @@ func WithPostPolicyEvaluation(e TriggeredEvaluation) EvaluationOption {
 // Specifies update paths for eval subject. This drives the conditional
 // assertions
 func WithMaskPaths(paths ...string) EvaluationOption {
-	return func(s *EvaluationSubject) {
+	return func(s *SubjectUnderEvaluation) {
 		s.paths = paths
 	}
 }
 
 func WithFieldStore(fs PolicySubjectStore) EvaluationOption {
-	return func(s *EvaluationSubject) {
+	return func(s *SubjectUnderEvaluation) {
 		s.store = fs
 	}
 }
 
 // For creates a new policy aggregate for the specified message that can be built upon using the
 // builder methods.
-func ForSubject(subject proto.Message, options ...EvaluationOption) *EvaluationSubject {
-	s := &EvaluationSubject{
+func ForSubject(subject proto.Message, options ...EvaluationOption) *SubjectUnderEvaluation {
+	s := &SubjectUnderEvaluation{
 		policies: make(map[Policy][]PolicySubject),
 	}
 	if len(options) > 0 {
@@ -127,7 +133,11 @@ func ForSubject(subject proto.Message, options ...EvaluationOption) *EvaluationS
 	return s
 }
 
-func (p *EvaluationSubject) HasNonZeroFields(fields ...string) *EvaluationSubject {
+// HasNonZeroFields pass in a list of fields that must not be equal to their
+// zero value
+//
+// example: sue := HasNonZeroFields("user.id", "user.first_name")
+func (p *SubjectUnderEvaluation) HasNonZeroFields(fields ...string) *SubjectUnderEvaluation {
 	policy := &propolicy{
 		conditions: InMask.And(InMessage),
 		traits: &trait{
@@ -144,7 +154,11 @@ func (p *EvaluationSubject) HasNonZeroFields(fields ...string) *EvaluationSubjec
 	return p
 }
 
-func (p *EvaluationSubject) HasNonZeroFieldsWhen(conds ...FieldCondition) *EvaluationSubject {
+// HasNonZeroFieldsWhen pass in a list of field conditions if you want to customize the conditions under which
+// a field non-zero evaluation is triggered
+//
+// example: sue := HasNonZeroFieldsWhen(IfInMask("user.first_name"), Always("user.first_name"))
+func (p *SubjectUnderEvaluation) HasNonZeroFieldsWhen(conds ...FieldCondition) *SubjectUnderEvaluation {
 	for _, c := range conds {
 		policy := &propolicy{
 			conditions: c.Condition,
@@ -161,7 +175,8 @@ func (p *EvaluationSubject) HasNonZeroFieldsWhen(conds ...FieldCondition) *Evalu
 	return p
 }
 
-func (p *EvaluationSubject) HasCustomEvaluation(field string, eval TriggeredEvaluation) *EvaluationSubject {
+// HasCustomEvaluation sets the specified evaluation on the field and will be run if the conditions are met.
+func (p *SubjectUnderEvaluation) HasCustomEvaluation(field string, eval TriggeredEvaluation) *SubjectUnderEvaluation {
 	policy := &customPropolicy{
 		conditions: InMask.And(InMessage),
 		arg:        p.store.Subject(),
@@ -171,7 +186,8 @@ func (p *EvaluationSubject) HasCustomEvaluation(field string, eval TriggeredEval
 	return p
 }
 
-func (p *EvaluationSubject) HasCustomEvaluationWhen(conditions FieldCondition, eval TriggeredEvaluation) *EvaluationSubject {
+// HasCustomEvaluationWhen sets the specified evaluation on the field and will be run if the conditions are met
+func (p *SubjectUnderEvaluation) HasCustomEvaluationWhen(conditions FieldCondition, eval TriggeredEvaluation) *SubjectUnderEvaluation {
 	policy := &customPropolicy{
 		conditions: conditions.Condition,
 		arg:        p.store.Subject(),
@@ -182,13 +198,15 @@ func (p *EvaluationSubject) HasCustomEvaluationWhen(conditions FieldCondition, e
 	return p
 }
 
-func (s *EvaluationSubject) CustomErrResultHandler(e ErrResultHandler) *EvaluationSubject {
-	s.errResultHandler = e
+// CustomErrResultHandler call this before calling E() or Evaluate() if you want to override
+// the errors that are output from the policy execution
+func (s *SubjectUnderEvaluation) CustomUhOhHandler(e UhOhHandler) *SubjectUnderEvaluation {
+	s.uhoh = e
 	return s
 }
 
 // E shorthand for Evaluate
-func (s *EvaluationSubject) E() error {
+func (s *SubjectUnderEvaluation) E() error {
 	return s.Evaluate()
 }
 
@@ -197,15 +215,15 @@ func (s *EvaluationSubject) E() error {
 // and field policies are not evaluated.
 //
 // To use your own infractionsHandler, specify a handler using WithInfractionsHandler.
-func (s *EvaluationSubject) Evaluate() error {
-	finfractions := make(map[string]error)
+func (s *SubjectUnderEvaluation) Evaluate() error {
+	uhohs := []UhOh{}
 	// evaluate the global pre-checks
 	if s.customEvaluationsPrePol != nil && len(s.customEvaluationsPrePol) > 0 {
 		for _, pvc := range s.customEvaluationsPrePol {
 			err := pvc(s.ctx, s.store.Subject())
 			if err != nil {
 				if s.continueOnGlobalEvalErr {
-					finfractions[globalKey] = err
+					uhohs = append(uhohs, RequestUhOh(err))
 				} else {
 					return err
 				}
@@ -216,7 +234,7 @@ func (s *EvaluationSubject) Evaluate() error {
 	for policy, subjects := range s.policies {
 		for _, subject := range subjects {
 			if err := policy.EvaluateSubject(s.ctx, subject); err != nil {
-				finfractions[subject.ID()] = err
+				uhohs = append(uhohs, FieldUhOh(subject.ID(), err))
 			}
 		}
 	}
@@ -226,18 +244,18 @@ func (s *EvaluationSubject) Evaluate() error {
 			err := pvc(s.ctx, s.store.Subject())
 			if err != nil {
 				if s.continueOnGlobalEvalErr {
-					finfractions[globalKey] = err
+					uhohs = append(uhohs, RequestUhOh(err))
 				} else {
 					return err
 				}
 			}
 		}
 	}
-	if len(finfractions) > 0 {
-		if s.errResultHandler == nil {
-			s.errResultHandler = newDefaultErrResultHandler()
+	if len(uhohs) > 0 {
+		if s.uhoh == nil {
+			s.uhoh = newDefaultUhOhHandler()
 		}
-		return s.errResultHandler.Process(finfractions)
+		return s.uhoh.SpaghettiOs(uhohs)
 	}
 	return nil
 }

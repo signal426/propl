@@ -8,6 +8,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// our traditional policy with sets of conditions and traits that
+// must be upheld
 var _ Policy = (*propolicy)(nil)
 
 type propolicy struct {
@@ -51,6 +53,10 @@ func (p *propolicy) checkTraits(s PolicySubject, t Trait) error {
 	return nil
 }
 
+// custom policy that executes a function that receives the
+// the entire aggregate object whenever a subject condition is met
+var _ Policy = (*customPropolicy)(nil)
+
 type customPropolicy struct {
 	arg        proto.Message
 	conditions Condition
@@ -64,9 +70,9 @@ func (p *customPropolicy) EvaluateSubject(ctx context.Context, subject PolicySub
 	if !subject.MeetsConditions(p.conditions) {
 		return fmt.Errorf("subject did not meet conditions %s", p.conditions.FlagsString())
 	}
-	return p.evaluateSubjectTraits(ctx)
+	return p.triggeredEvaluation(ctx)
 }
 
-func (mp *customPropolicy) evaluateSubjectTraits(ctx context.Context) error {
+func (mp *customPropolicy) triggeredEvaluation(ctx context.Context) error {
 	return mp.eval(ctx, mp.arg)
 }
