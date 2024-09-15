@@ -1,9 +1,5 @@
 package propl
 
-import (
-	"fmt"
-)
-
 type TraitType uint32
 
 const (
@@ -13,11 +9,14 @@ const (
 
 var _ Trait = (*trait)(nil)
 
-// trait
+// trait is a feature of a subject
 type trait struct {
+	// the trait type
 	traitType TraitType
-	andTrait  *trait
-	orTrait   *trait
+	// the trait that this trait is composed with
+	andTrait *trait
+	// the trait that this trait is composed with
+	orTrait *trait
 }
 
 func (t *trait) and(and *trait) *trait {
@@ -46,6 +45,9 @@ func (t *trait) or(or *trait) *trait {
 	return t
 }
 
-func (t *trait) InfractionsString() string {
-	return fmt.Sprintf("it should not be zero")
+func (t *trait) UhOhString() string {
+	if t.Type() == NotZero {
+		return "it should not be zero"
+	}
+	return "it should not be equal to the supplied value"
 }

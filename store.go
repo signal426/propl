@@ -1,6 +1,7 @@
 package propl
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -9,29 +10,60 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type fieldStore[T proto.Message] struct {
-	msg            T
+var _ PolicySubjectStore = (*fieldStore)(nil)
+
+type fieldStore struct {
+	msg            proto.Message
 	maskPathLookup map[string]struct{}
 	store          map[string]*fieldData
 }
 
-func newFieldStore[T proto.Message](msg T, maskPaths ...string) *fieldStore[T] {
-	pathLookup := make(map[string]struct{})
-	for _, p := range maskPaths {
-		pathLookup[p] = struct{}{}
-	}
-	return &fieldStore[T]{
-		msg:            msg,
-		store:          make(map[string]*fieldData),
-		maskPathLookup: pathLookup,
+// Subject implements PolicySubjectStore.
+func (s *fieldStore) Subject() proto.Message {
+	return s.msg
+}
+
+// GetByID implements PolicySubjectStore.
+func (s *fieldStore) GetByID(_ context.Context, id string) PolicySubject {
+	return s.dataAtPath(id)
+}
+
+// ProcessByID implements PolicySubjectStore.
+func (s *fieldStore) ProcessByID(ctx context.Context, id string) PolicySubject {
+	s.processPathRecursive(s.msg, s.msg.ProtoReflect().Descriptor(), s.isFieldInMask(id), id, "")
+	return s.dataAtPath(id)
+}
+
+type initFieldStoreOption func(*fieldStore)
+
+func withPaths(paths ...string) initFieldStoreOption {
+	return func(fs *fieldStore) {
+		pathLookup := make(map[string]struct{})
+		for _, p := range paths {
+			pathLookup[p] = struct{}{}
+		}
+		fs.maskPathLookup = pathLookup
 	}
 }
 
-func (f fieldStore[T]) message() T {
+func initFieldStore(msg proto.Message, options ...initFieldStoreOption) *fieldStore {
+	s := &fieldStore{
+		msg:   msg,
+		store: make(map[string]*fieldData),
+	}
+	if len(options) > 0 {
+		for _, o := range options {
+			o(s)
+		}
+	}
+	return s
+}
+
+func (f fieldStore) message() proto.Message {
 	return f.msg
 }
 
-func (f fieldStore[T]) isFieldInMask(p string) bool {
+func (f fieldStore) isFieldInMask(p string) bool {
 	if _, im := f.maskPathLookup[p]; im {
 		return im
 	}
@@ -39,20 +71,19 @@ func (f fieldStore[T]) isFieldInMask(p string) bool {
 		if _, im := f.maskPathLookup[s[len(s)-1]]; im {
 			return im
 		}
-		// todo: check json name
 	}
 	return false
 }
 
-func (f fieldStore[T]) empty() bool {
+func (f fieldStore) empty() bool {
 	return f.store == nil || len(f.store) == 0
 }
 
-func (f *fieldStore[T]) add(fd *fieldData) {
+func (f *fieldStore) add(fd *fieldData) {
 	f.store[fd.p()] = fd
 }
 
-func (f fieldStore[T]) dataAtPath(p string) *fieldData {
+func (f fieldStore) dataAtPath(p string) *fieldData {
 	fd, ok := f.store[p]
 	if !ok {
 		// we may have a field that was in a mask, but not set in the message.
@@ -74,23 +105,36 @@ type fieldData struct {
 	value  protoreflect.Value
 }
 
+// Evaluatable implements PolicySubject.
+func (f *fieldData) Evaluatable(conditions Condition) bool {
+	if !conditions.Has(InMessage) && conditions.Has(InMask) && !f.m() {
+		return false
+	}
+	return true
+}
+
+// MeetsConditions implements PolicySubject.
+func (f *fieldData) MeetsConditions(conditions Condition) bool {
+	if !f.Evaluatable(conditions) {
+		return false
+	}
+	if !f.s() && conditions.Has(InMessage) {
+		return false
+	}
+	if !f.s() && conditions.Has(InMask) && f.m() {
+		return false
+	}
+	return true
+}
+
+// ID implements PolicySubject.
+func (f *fieldData) ID() string {
+	return f.p()
+}
+
 // HasTrait implements policy.Subject.
 func (f *fieldData) HasTrait(t Trait) bool {
 	return t.Type() == NotZero && f.z()
-}
-
-// ConditionalAction implements policy.Subject.
-func (f *fieldData) ConditionalAction(conditions Condition) Action {
-	if !f.s() && conditions.Has(InMessage) {
-		return Fail
-	}
-	if !f.s() && conditions.Has(InMask) && f.m() {
-		return Fail
-	}
-	if !conditions.Has(InMessage) && conditions.Has(InMask) && !f.m() {
-		return Skip
-	}
-	return Check
 }
 
 func newFieldData(fv protoreflect.Value, inMask bool, path string) *fieldData {
@@ -133,15 +177,7 @@ func (f fieldData) s() bool {
 	return f.set
 }
 
-// processPath processes the field path elements
-//
-// returns the field data from the field at the provided path location.
-func (store *fieldStore[T]) processPath(field string) *fieldStore[T] {
-	store.processPathRecursive(store.msg, store.msg.ProtoReflect().Descriptor(), store.isFieldInMask(field), field, "")
-	return store
-}
-
-func (store *fieldStore[T]) processPathRecursive(message proto.Message, desc protoreflect.MessageDescriptor, inMask bool, field, traversed string) {
+func (store *fieldStore) processPathRecursive(message proto.Message, desc protoreflect.MessageDescriptor, inMask bool, field, traversed string) {
 	if message == nil || desc == nil || field == "" || field == "." {
 		return
 	}

@@ -8,6 +8,7 @@ import (
 
 	proplv1 "buf.build/gen/go/signal426/propl/protocolbuffers/go/propl/v1"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
@@ -29,9 +30,10 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := Subject(req).NeverZero("user.id")
+		p := ForSubject(req, WithCtx(context.Background())).
+			HasNonZeroFields("user", "user.id")
 		// act
-		err := p.E(context.Background())
+		err := p.E()
 		// assert
 		assert.Error(t, err)
 	})
@@ -43,14 +45,19 @@ func TestFieldPolicies(t *testing.T) {
 				FirstName: "Bob",
 			},
 		}
-		p := Subject(req).NeverErr("user.first_name", func(t *proplv1.CreateUserRequest) error {
-			if t.GetUser().GetFirstName() == "Bob" {
-				return errors.New("cant be bob")
-			}
-			return nil
-		})
+		p := ForSubject(req, WithCtx(context.Background())).
+			HasCustomEvaluation("user.first_name", func(ctx context.Context, msg proto.Message) error {
+				req, err := AssertType[*proplv1.CreateUserRequest](msg)
+				if err != nil {
+					return err
+				}
+				if req.GetUser().GetFirstName() == "Bob" {
+					return errors.New("something happened")
+				}
+				return nil
+			})
 		// act
-		err := p.E(context.Background())
+		err := p.E()
 		// assert
 		assert.Error(t, err)
 	})
@@ -69,14 +76,14 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name"},
 			},
 		}
-		p := Subject(req, req.GetUpdateMask().GetPaths()...).
-			NeverZero("user.id", "some.fake").
-			NeverZeroWhen(
+		p := ForSubject(req, WithMaskPaths(req.GetUpdateMask().GetPaths()...)).
+			HasNonZeroFields("user.id", "some.fake").
+			HasNonZeroFieldsWhen(
 				IsInMask("user.last_name"),
 				IsInMask("user.primary_address"),
 				IsInMask("user.primary_address.line1"))
 		// act
-		err := p.E(context.Background())
+		err := p.E()
 		// assert
 		assert.Error(t, err)
 	})
@@ -95,28 +102,36 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name", "line1"},
 			},
 		}
-		p := Subject(req, req.GetUpdateMask().GetPaths()...).
-			NeverZero("user.id", "some.fake").
-			NeverZeroWhen(
+		p := ForSubject(req, WithCtx(context.Background()), WithMaskPaths(req.GetUpdateMask().GetPaths()...)).
+			HasNonZeroFields("user.id", "some.fake").
+			HasNonZeroFieldsWhen(
 				IsInMask("user.first_name"),
 				IsInMask("user.last_name"),
 				IsInMask("user.primary_address")).
-			NeverErrWhen(IsInMask("user.primary_address.line1"), func(msg *proplv1.UpdateUserRequest) error {
-				if msg.GetUser().GetPrimaryAddress().GetLine1() == "a" {
+			HasCustomEvaluationWhen(IsInMask("user.primary_address.line1"), func(ctx context.Context, msg proto.Message) error {
+				req, err := AssertType[*proplv1.UpdateUserRequest](msg)
+				if err != nil {
+					return err
+				}
+				if req.GetUser().GetPrimaryAddress().GetLine1() == "a" {
 					return errors.New("cannot be a")
 				}
 				return nil
 			})
 		// act
-		err := p.CustomErrResultHandler(MyErrResultHandler{}).E(context.Background())
+		err := p.CustomErrResultHandler(MyErrResultHandler{}).E()
 		// assert
 		assert.Error(t, err)
 	})
 
 	t.Run("it should validate with precheck", func(t *testing.T) {
 		// arrange
-		authorizeUpdate := func(_ context.Context, msg *proplv1.UpdateUserRequest) error {
-			if msg.GetUser().GetId() != "abc123" {
+		authorizeUpdate := func(_ context.Context, msg proto.Message) error {
+			req, err := AssertType[*proplv1.UpdateUserRequest](msg)
+			if err != nil {
+				return err
+			}
+			if req.GetUser().GetId() != "abc123" {
 				return errors.New("can only update user abc123")
 			}
 			return nil
@@ -133,15 +148,17 @@ func TestFieldPolicies(t *testing.T) {
 				Paths: []string{"first_name", "last_name"},
 			},
 		}
-		p := For(Ctx{}).
-			NeverZero("user.id").
-			NeverZero("some.fake").
-			NeverZeroWhen("user.first_name", InMask).
-			NeverZeroWhen("user.last_name", InMask).
-			NeverZeroWhen("user.primary_address", InMask).
-			NeverZeroWhen("user.primary_address.line1", InMask)
+		p := ForSubject(req,
+			WithCtx(context.Background()),
+			WithMaskPaths(req.GetUpdateMask().GetPaths()...),
+			WithPrePolicyEvaluation(authorizeUpdate)).
+			HasNonZeroFields("user.id", "some.fake").
+			HasNonZeroFieldsWhen(
+				IsInMask("user.first_name"),
+				IsInMask("user.last_name"),
+				IsInMask("user.primary_address"))
 		// act
-		err := p.E(context.Background())
+		err := p.E()
 		// assert
 		assert.Error(t, err)
 	})
