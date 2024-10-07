@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+type PolicyFaults map[string]error
+
 type UhOhType uint32
 
 const (
@@ -57,14 +59,33 @@ type UhOhHandler interface {
 
 var _ UhOhHandler = (*defaultUhOhHandler)(nil)
 
-type defaultUhOhHandler struct{}
+type defaultUhOhHandler struct {
+	format Format
+}
 
-func newDefaultUhOhHandler() *defaultUhOhHandler {
-	return &defaultUhOhHandler{}
+type defaultUhOhHandlerOption func(*defaultUhOhHandler)
+
+func withJSONFormt() defaultUhOhHandlerOption {
+	return func(d *defaultUhOhHandler) {
+		d.format = JSON
+	}
+}
+
+func newDefaultUhOhHandler(options ...defaultUhOhHandlerOption) *defaultUhOhHandler {
+	h := &defaultUhOhHandler{}
+	if len(options) > 0 {
+		for _, o := range options {
+			o(h)
+		}
+	}
+	return h
 }
 
 // Process implements ErrResultHandler.
 func (*defaultUhOhHandler) SpaghettiOs(uhohs []UhOh) error {
+	if len(uhohs) == 0 {
+		return nil
+	}
 	var (
 		buffer         bytes.Buffer
 		sectionWritten string
@@ -80,8 +101,9 @@ func (*defaultUhOhHandler) SpaghettiOs(uhohs []UhOh) error {
 			buffer.WriteString(fmt.Sprintf("%s.issues: [\n", strings.ToLower(v.Type.String())))
 			sectionWritten = v.Type.String()
 		}
+		// if on the type because errors at the request level won't be scoped to a field
 		var lineitem string
-		if v.Field == "" {
+		if v.Type == Request {
 			lineitem = fmt.Sprintf("%s\\n\n", v.Err.Error())
 		} else {
 			lineitem = fmt.Sprintf("%s: %s\\n\n", v.Field, v.Err.Error())

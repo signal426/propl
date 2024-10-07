@@ -19,7 +19,7 @@ type fieldStore struct {
 }
 
 // Subject implements PolicySubjectStore.
-func (s *fieldStore) Subject() proto.Message {
+func (s *fieldStore) Source() proto.Message {
 	return s.msg
 }
 
@@ -106,7 +106,7 @@ type fieldData struct {
 }
 
 // Evaluatable implements PolicySubject.
-func (f *fieldData) Evaluatable(conditions Condition) bool {
+func (f *fieldData) Evaluatable(conditions MsgCondition, request proto.Message) bool {
 	if !conditions.Has(InMessage) && conditions.Has(InMask) && !f.m() {
 		return false
 	}
@@ -114,8 +114,8 @@ func (f *fieldData) Evaluatable(conditions Condition) bool {
 }
 
 // MeetsConditions implements PolicySubject.
-func (f *fieldData) MeetsConditions(conditions Condition) bool {
-	if !f.Evaluatable(conditions) {
+func (f *fieldData) MeetsConditions(conditions MsgCondition, request proto.Message) bool {
+	if !f.Evaluatable(conditions, request) {
 		return false
 	}
 	if !f.s() && conditions.Has(InMessage) {
@@ -133,7 +133,7 @@ func (f *fieldData) ID() string {
 }
 
 // HasTrait implements policy.Subject.
-func (f *fieldData) HasTrait(t Trait) bool {
+func (f *fieldData) HasTrait(t SubjectTrait) bool {
 	return t.Type() == NotZero && f.z()
 }
 

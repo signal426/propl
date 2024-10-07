@@ -16,9 +16,9 @@ const _Condition_name = "InMessageInMask"
 
 var _Condition_index = [...]uint8{0, 9, 15}
 
-func (i Condition) String() string {
+func (i MsgCondition) String() string {
 	i -= 1
-	if i >= Condition(len(_Condition_index)-1) {
+	if i >= MsgCondition(len(_Condition_index)-1) {
 		return "Condition(" + strconv.FormatInt(int64(i+1), 10) + ")"
 	}
 	return _Condition_name[_Condition_index[i]:_Condition_index[i+1]]

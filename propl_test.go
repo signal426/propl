@@ -128,7 +128,6 @@ func TestFieldPolicies(t *testing.T) {
 		// call this before running the evaluation in order to substitute your own error result handler
 		// to do things like custom formatting
 		err := p.E()
-		fmt.Printf("%s\n", err.Error())
 		// assert
 		assert.Error(t, err)
 	})
@@ -168,7 +167,6 @@ func TestFieldPolicies(t *testing.T) {
 				IsInMask("user.primary_address"))
 		// act
 		err := p.E()
-		fmt.Printf("%s\n", err.Error())
 		// assert
 		assert.Error(t, err)
 	})
@@ -208,7 +206,6 @@ func TestFieldPolicies(t *testing.T) {
 				IsInMask("user.primary_address"))
 		// act
 		err := p.E()
-		fmt.Printf("%s\n", err.Error())
 		// assert
 		assert.Error(t, err)
 	})
@@ -249,7 +246,6 @@ func TestFieldPolicies(t *testing.T) {
 				IsInMask("user.primary_address"))
 		// act
 		err := p.E()
-		fmt.Printf("%s\n", err.Error())
 		// assert
 		assert.Error(t, err)
 	})

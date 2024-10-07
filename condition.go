@@ -4,28 +4,28 @@ import (
 	"bytes"
 )
 
-type Condition uint32
+type MsgCondition uint32
 
 const (
-	InMessage Condition = 1 << iota
+	InMessage MsgCondition = 1 << iota
 	InMask
 )
 
-func (c Condition) And(and Condition) Condition {
+func (c MsgCondition) And(and MsgCondition) MsgCondition {
 	c |= and
 	return c
 }
 
-func (c Condition) Or(or Condition) Condition {
+func (c MsgCondition) Or(or MsgCondition) MsgCondition {
 	c &= or
 	return c
 }
 
-func (c Condition) Has(has Condition) bool {
+func (c MsgCondition) Has(has MsgCondition) bool {
 	return c&has != 0
 }
 
-func (c Condition) FlagsString() string {
+func (c MsgCondition) FlagsString() string {
 	var buffer bytes.Buffer
 	if c.Has(InMessage) {
 		buffer.WriteString(InMessage.String())
@@ -39,10 +39,6 @@ func (c Condition) FlagsString() string {
 	return buffer.String()
 }
 
-type Action uint32
-
-const (
-	Check Action = iota
-	Fail
-	Skip
-)
+func AlwaysInMsg() MsgCondition {
+	return InMessage.And(InMask)
+}

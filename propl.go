@@ -9,49 +9,63 @@ import (
 const (
 	prevalErr  = "the message failed prevalidation"
 	postValErr = "the message failed postvalidation"
-	globalKey  = "global"
+)
+
+// output format of the errors
+type Format uint32
+
+const (
+	Default Format = iota
+	JSON
 )
 
 // Represents a field id and a condition that triggers
 // an evaluation of said field
 type FieldCondition struct {
 	Field     string
-	Condition Condition
+	Value     interface{}
+	Condition MsgCondition
 }
 
 // IsInMask constructs a condition that dictates the field
 // is only evaluated if it is speficied in an update mask
-func IsInMask(field string) FieldCondition {
+func IsInMask(field string, value interface{}) FieldCondition {
 	return FieldCondition{
 		Field:     field,
 		Condition: InMask,
+		Value:     value,
 	}
 }
 
 // Always constructs a condition that dictates the field
 // is always expected to be present for evaluation
-func Always(field string) FieldCondition {
+func AlwaysPresent(field string, value interface{}) FieldCondition {
 	return FieldCondition{
 		Field:     field,
 		Condition: InMask.And(InMessage),
+		Value:     value,
 	}
 }
 
 type SubjectUnderEvaluation struct {
-	// context if supplied
-	ctx context.Context
-	// the store for the policy subjects that compose this evaluation
-	store PolicySubjectStore
 	// custom evaluations triggered by a field condition.
 	// custom evaluation callbacks are provided the entire payload, not just the field data.
 	// these callbacks get triggererd before any policies have been evaluated.
 	// they are executed in the order in which they were attached to the subject.
-	customEvaluationsPrePol []TriggeredEvaluation
+	prepoliciesactions []Action
 	// custom evaluations triggered by a field condition. these
 	// callbacks get triggered after all policies have been evaluated.
-	customEvaluationsPostPol []TriggeredEvaluation
+	postpoliciesactions []Action
 	// policies is the map of field ids to some policy configuration
-	policies map[Policy][]PolicySubject
+	pm *PolicyManager
+	// map of trait policy ids to a list of subject ids
+	traitPolicySubjectMap map[string][]string
+	// map of action policy ids to a list of subject ids
+	actionPolicySubjectMap map[string][]string
+	// pointer to policy index for faster lookups
+	// a generator of policies traditional field policies
+	// pointer to policy index for faster lookups
+	apdx map[string]int
 	// errResultHandler is the handler that manages the output of the evaluations
 	uhoh UhOhHandler
 	// paths is list of fields that are being evaluated if a field mask is supplied
@@ -82,23 +96,23 @@ func WithContinueOnGlobalEvalErr() EvaluationOption {
 
 // Specify global pre-checks. These are executed in the order in which they
 // are specified.
-func WithPrePolicyEvaluation(e TriggeredEvaluation) EvaluationOption {
+func WithPrePolicyAction(e Action) EvaluationOption {
 	return func(s *SubjectUnderEvaluation) {
-		if s.customEvaluationsPrePol == nil {
-			s.customEvaluationsPrePol = make([]TriggeredEvaluation, 0, 3)
+		if s.prepoliciesactions == nil {
+			s.prepoliciesactions = make([]Action, 0, 3)
 		}
-		s.customEvaluationsPrePol = append(s.customEvaluationsPrePol, e)
+		s.prepoliciesactions = append(s.prepoliciesactions, e)
 	}
 }
 
 // Specify global pos-checks. These are executed inthe order in which they
 // are specified
-func WithPostPolicyEvaluation(e TriggeredEvaluation) EvaluationOption {
+func WithPostPolicyAction(e Action) EvaluationOption {
 	return func(s *SubjectUnderEvaluation) {
-		if s.customEvaluationsPostPol == nil {
-			s.customEvaluationsPostPol = make([]TriggeredEvaluation, 0, 3)
+		if s.postpoliciesactions == nil {
+			s.postpoliciesactions = make([]Action, 0, 3)
 		}
-		s.customEvaluationsPostPol = append(s.customEvaluationsPostPol, e)
+		s.postpoliciesactions = append(s.postpoliciesactions, e)
 	}
 }
 
@@ -110,46 +124,30 @@ func WithMaskPaths(paths ...string) EvaluationOption {
 	}
 }
 
-func WithFieldStore(fs PolicySubjectStore) EvaluationOption {
-	return func(s *SubjectUnderEvaluation) {
-		s.store = fs
-	}
-}
-
 // For creates a new policy aggregate for the specified message that can be built upon using the
 // builder methods.
 func ForSubject(subject proto.Message, options ...EvaluationOption) *SubjectUnderEvaluation {
-	s := &SubjectUnderEvaluation{
-		policies: make(map[Policy][]PolicySubject),
-	}
+	s := &SubjectUnderEvaluation{}
 	if len(options) > 0 {
 		for _, o := range options {
 			o(s)
 		}
 	}
-	if s.store == nil {
-		s.store = initFieldStore(subject, withPaths(s.paths...))
-	}
 	return s
 }
 
-// HasNonZeroFields pass in a list of fields that must not be equal to their
+// HasNonZeroField pass in a list of fields that must not be equal to their
 // zero value
 //
 // example: sue := HasNonZeroFields("user.id", "user.first_name")
-func (p *SubjectUnderEvaluation) HasNonZeroFields(fields ...string) *SubjectUnderEvaluation {
-	policy := &propolicy{
-		conditions: InMask.And(InMessage),
-		traits: &trait{
-			traitType: NotZero,
-		},
-	}
-	_, ok := p.policies[policy]
+func (p *SubjectUnderEvaluation) AssertNonZero(path string, value interface{}) *SubjectUnderEvaluation {
+	var (
+		policy TraitPolicy
+		ok     bool
+	)
+	policy, ok = p.pm.GetTraitPolicy(AlwaysInMsg(), NotZeroTrait())
 	if !ok {
-		p.policies[policy] = make([]PolicySubject, 0, 3)
-	}
-	for _, f := range fields {
-		p.policies[policy] = append(p.policies[policy], p.store.ProcessByID(p.ctx, f))
+		p.pm.SetPolicy(AlwaysInMsg(), NotZeroTrait())
 	}
 	return p
 }
@@ -160,41 +158,50 @@ func (p *SubjectUnderEvaluation) HasNonZeroFields(fields ...string) *SubjectUnde
 // example: sue := HasNonZeroFieldsWhen(IfInMask("user.first_name"), Always("user.first_name"))
 func (p *SubjectUnderEvaluation) HasNonZeroFieldsWhen(conds ...FieldCondition) *SubjectUnderEvaluation {
 	for _, c := range conds {
-		policy := &propolicy{
-			conditions: c.Condition,
-			traits: &trait{
-				traitType: NotZero,
-			},
-		}
-		_, ok := p.policies[policy]
+		id := GetID(c.Condition, NotZeroTrait())
+		policy, ok := p.pm.GetTraitPolicy(c.Condition, NotZeroTrait())
 		if !ok {
-			p.policies[policy] = make([]PolicySubject, 0, 3)
+			policy = p.pm.SetPolicy(c.Condition, NotZeroTrait())
+			p.traitPolicySubjectMap[id] = []string{c.Field}
+		} else {
+			p.traitPolicySubjectMap[policy.ID()] = append(p.traitPolicySubjectMap[policy.ID()], c.Field)
 		}
-		p.policies[policy] = append(p.policies[policy], p.store.ProcessByID(p.ctx, c.Field))
 	}
 	return p
 }
 
 // HasCustomEvaluation sets the specified evaluation on the field and will be run if the conditions are met.
-func (p *SubjectUnderEvaluation) HasCustomEvaluation(field string, eval TriggeredEvaluation) *SubjectUnderEvaluation {
-	policy := &customPropolicy{
-		conditions: InMask.And(InMessage),
-		arg:        p.store.Subject(),
-		eval:       eval,
+func (p *SubjectUnderEvaluation) HasCustomEvaluation(field string, action Action) *SubjectUnderEvaluation {
+	policy := p.pm.SetActionPolicy(AlwaysInMsg(), action, field)
+	_, ok := p.pm.GetActionPolicy(AlwaysInMsg(), field)
+	p.actionPolicySubjectMap[policy.ID()] = append(p.actionPolicySubjectMap[policy.ID()], field)
+	if !ok {
+		p.apdx[policy.ID()] = len(p.actionPolicySubjectMap) - 1
 	}
-	p.policies[policy] = append(p.policies[policy], p.store.ProcessByID(p.ctx, field))
 	return p
 }
 
 // HasCustomEvaluationWhen sets the specified evaluation on the field and will be run if the conditions are met
-func (p *SubjectUnderEvaluation) HasCustomEvaluationWhen(conditions FieldCondition, eval TriggeredEvaluation) *SubjectUnderEvaluation {
-	policy := &customPropolicy{
-		conditions: conditions.Condition,
-		arg:        p.store.Subject(),
-		eval:       eval,
+func (p *SubjectUnderEvaluation) HasCustomEvaluationWhen(conditions FieldCondition, eval Action) *SubjectUnderEvaluation {
+	policySubject := p.store.ProcessByID(p.ctx, conditions.Field)
+	if existingidx, ok := p.apdx[conditions.Field]; ok {
+		existing := p.actionPolicies[existingidx]
+		existing.Subjects = []PolicySubject{policySubject}
+		existing.Traits = &trait{traitType: Custom}
+		existing.Conditions = conditions.Condition
+		existing.Action = eval
+	} else {
+		newPolicy := &ActionPolicy{
+			Policy: &TraitPolicy{
+				Subjects:   []PolicySubject{policySubject},
+				Traits:     &trait{traitType: Custom},
+				Conditions: conditions.Condition,
+			},
+			Action: eval,
+		}
+		p.actionPolicies = append(p.actionPolicies, newPolicy)
+		p.apdx[conditions.Field] = len(p.actionPolicies) - 1
 	}
-	f := p.store.ProcessByID(p.ctx, conditions.Field)
-	p.policies[policy] = append(p.policies[policy], f)
 	return p
 }
 
@@ -210,52 +217,62 @@ func (s *SubjectUnderEvaluation) E() error {
 	return s.Evaluate()
 }
 
+func (s *SubjectUnderEvaluation) handlePrevals() ([]UhOh, error) {
+	var uhohs []UhOh
+	// evaluate the global pre-checks
+	if s.prepoliciesactions != nil && len(s.prepoliciesactions) > 0 {
+		for _, action := range s.prepoliciesactions {
+			err := action(s.ctx, s.store.Subject())
+			if err != nil {
+				if !s.continueOnGlobalEvalErr {
+					return nil, s.uhoh.SpaghettiOs(uhohs)
+				}
+				uhohs = append(uhohs, RequestUhOh(err))
+			}
+		}
+	}
+	return uhohs, nil
+}
+
+func (s *SubjectUnderEvaluation) handlePostVals() ([]UhOh, error) {
+	// instantiate because empty actually has meaning
+	uhohs := []UhOh{}
+	// evaluate the global pre-checks
+	if s.postpoliciesactions != nil && len(s.postpoliciesactions) > 0 {
+		for _, action := range s.postpoliciesactions {
+			err := action(s.ctx, s.store.Subject())
+			if err != nil {
+				if !s.continueOnGlobalEvalErr {
+					return nil, s.uhoh.SpaghettiOs(uhohs)
+				}
+				uhohs = append(uhohs, RequestUhOh(err))
+			}
+		}
+	}
+	return uhohs, nil
+}
+
 // Evaluate checks each declared policy and returns an error describing
 // each infraction. If a precheck is specified and returns an error, this exits
 // and field policies are not evaluated.
 //
 // To use your own infractionsHandler, specify a handler using WithInfractionsHandler.
 func (s *SubjectUnderEvaluation) Evaluate() error {
-	uhohs := []UhOh{}
-	// evaluate the global pre-checks
-	if s.customEvaluationsPrePol != nil && len(s.customEvaluationsPrePol) > 0 {
-		for _, pvc := range s.customEvaluationsPrePol {
-			err := pvc(s.ctx, s.store.Subject())
-			if err != nil {
-				if s.continueOnGlobalEvalErr {
-					uhohs = append(uhohs, RequestUhOh(err))
-				} else {
-					return err
-				}
+	uhohs, err := s.handlePrevals()
+	if err != nil {
+		return err
+	}
+	for _, policy := range s.policies {
+		if errs := policy.EvaluateSubject(s.ctx, s.store.Subject()); err != nil {
+			for field, err := range errs {
+				uhohs = append(uhohs, FieldUhOh(field, err))
 			}
 		}
 	}
-	// evaluate the list of policies
-	for policy, subjects := range s.policies {
-		for _, subject := range subjects {
-			if err := policy.EvaluateSubject(s.ctx, subject); err != nil {
-				uhohs = append(uhohs, FieldUhOh(subject.ID(), err))
-			}
-		}
+	postuhohs, err := s.handlePostVals()
+	if err != nil {
+		return err
 	}
-	// evaluate the global post-checks
-	if s.customEvaluationsPostPol != nil && len(s.customEvaluationsPostPol) > 0 {
-		for _, pvc := range s.customEvaluationsPostPol {
-			err := pvc(s.ctx, s.store.Subject())
-			if err != nil {
-				if s.continueOnGlobalEvalErr {
-					uhohs = append(uhohs, RequestUhOh(err))
-				} else {
-					return err
-				}
-			}
-		}
-	}
-	if len(uhohs) > 0 {
-		if s.uhoh == nil {
-			s.uhoh = newDefaultUhOhHandler()
-		}
-		return s.uhoh.SpaghettiOs(uhohs)
-	}
-	return nil
+	uhohs = append(uhohs, postuhohs...)
+	return s.uhoh.SpaghettiOs(uhohs)
 }
